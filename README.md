@@ -235,16 +235,208 @@ You can also explore and test the API using FastAPIs automatic docs:
 
 ## 10. Project structure (high level)
 
-- `run.py`  Application entrypoint (starts FastAPI/Uvicorn).
+- `run.py` – Application entrypoint (starts FastAPI/Uvicorn).
 - `app/`
-  - `main.py` / `__init__.py`  FastAPI app wiring.
-  - `api/routes.py`  All REST API endpoints.
-  - `agents/`  LLM / LangGraph agent construction.
-  - `core/`  Configuration and settings.
-  - `models/`  SQLAlchemy models and DB session configuration.
-  - `prompts/`  Prompt templates (e.g. JD review system prompt).
-- `sql/init.sql`  Database schema initialization.
-- `dev.db`  SQLite database file (created after init).
-- `requirements.txt`  Python dependencies.
+  - `main.py` / `__init__.py` – FastAPI app wiring.
+  - `api/routes.py` – All REST API endpoints.
+  - `agents/` – LLM / LangGraph agent construction.
+  - `core/` – Configuration and settings.
+  - `models/` – SQLAlchemy models and DB session configuration.
+  - `prompts/` – Prompt templates (e.g. JD review system prompt).
+- `sql/init.sql` – Database schema initialization.
+- `dev.db` – SQLite database file (created after init).
+- `requirements.txt` – Python dependencies.
 
 This README should give you enough to set up and run the application on both macOS and Windows.
+
+---
+
+## 11. API call examples (with test data and responses)
+
+Base URL (default): `http://127.0.0.1:8000`
+
+> Note: Example responses are illustrative; actual values will vary.
+
+### 11.1 `POST /auth/login`
+
+**Request**
+
+```bash
+curl -X POST "http://127.0.0.1:8000/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_name": "saikodati",
+    "password": "root"
+  }'
+```
+
+**Sample response**
+
+```json
+{
+  "success": true,
+  "message": "Login successful"
+}
+```
+
+---
+
+### 11.2 `POST /chat`
+
+**Request**
+
+```bash
+curl -X POST "http://127.0.0.1:8000/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Summarize the responsibilities of a data engineer."
+  }'
+```
+
+**Sample response**
+
+```json
+{
+  "response": "A data engineer designs, builds, and maintains data pipelines, ..."
+}
+```
+
+---
+
+### 11.3 `POST /jd/builder`
+
+**Request**
+
+```bash
+curl -X POST "http://127.0.0.1:8000/jd/builder" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "raw_jd_content": "We are looking for a senior backend engineer with experience in Python and FastAPI..."
+  }'
+```
+
+**Sample response**
+
+```json
+{
+  "updated_jd_content": "We are seeking a Senior Backend Engineer with strong experience in Python, FastAPI, and SQL...",
+  "score": "8.5",
+  "suggestions": "Clarify remote work policy; specify performance expectations and KPIs."
+}
+```
+
+---
+
+### 11.4 `POST /jd/upload`
+
+Upload a JD file (e.g., `sample_jd.txt`) and associate it with a user name.
+
+**Request**
+
+```bash
+curl -X POST "http://127.0.0.1:8000/jd/upload" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@sample_jd.txt" \
+  -F "uploaded_by=saikodati"
+```
+
+**Sample response**
+
+```json
+{
+  "jd_id": 1,
+  "file_name": "sample_jd.txt",
+  "file_saved_location": "uploaded_jds/sample_jd.txt"
+}
+```
+
+---
+
+### 11.5 `GET /jd/{jd_id}`
+
+Fetch JD details and download path.
+
+**Request**
+
+```bash
+curl -X GET "http://127.0.0.1:8000/jd/1" -H "accept: application/json"
+```
+
+**Sample response**
+
+```json
+{
+  "jd_id": 1,
+  "file_name": "sample_jd.txt",
+  "uploaded_by": "saikodati",
+  "created_date": "2026-02-10T12:34:56.000000",
+  "download": "uploaded_jds/sample_jd.txt"
+}
+```
+
+---
+
+### 11.6 `POST /resumes/upload`
+
+Upload a resume file and link it to an existing JD via `jd_id`.
+
+**Request**
+
+```bash
+curl -X POST "http://127.0.0.1:8000/resumes/upload?jd_id=1" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@candidate_resume.pdf" \
+  -F "uploaded_by=saikodati"
+```
+
+**Sample response**
+
+```json
+{
+  "resume_id": 1,
+  "jd_id": 1,
+  "file_name": "candidate_resume.pdf",
+  "file_location": "uploaded_jds/candidate_resume.pdf"
+}
+```
+
+---
+
+### 11.7 `GET /resumes?jd_id={id}`
+
+List all resumes associated with a given JD.
+
+**Request**
+
+```bash
+curl -X GET "http://127.0.0.1:8000/resumes?jd_id=1" -H "accept: application/json"
+```
+
+**Sample response**
+
+```json
+{
+  "resumes": [
+    {
+      "resume_id": 1,
+      "jd_id": 1,
+      "file_name": "candidate_resume.pdf",
+      "file_location": "uploaded_jds/candidate_resume.pdf",
+      "uploaded_by": "saikodati",
+      "created_date": "2026-02-10T12:40:00.000000"
+    },
+    {
+      "resume_id": 2,
+      "jd_id": 1,
+      "file_name": "candidate_resume_2.pdf",
+      "file_location": "uploaded_jds/candidate_resume_2.pdf",
+      "uploaded_by": "recruiter1",
+      "created_date": "2026-02-10T13:05:00.000000"
+    }
+  ]
+}
+```
+
+These examples can be used directly with `curl`, Postman, or any HTTP client to test the APIs end to end.

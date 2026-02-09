@@ -1,0 +1,246 @@
+{
+  "name": "HireSenceAPIs",
+  "version": "1",
+  "items": [
+    {
+      "type": "http",
+      "name": "chat",
+      "filename": "chat.bru",
+      "seq": 1,
+      "request": {
+        "url": "http://localhost:8000/api/chat",
+        "method": "POST",
+        "headers": [],
+        "params": [],
+        "body": {
+          "mode": "json",
+          "json": "{\n  \"message\": \"Hello, who are you?\"\n}",
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": []
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "none"
+        }
+      }
+    },
+    {
+      "type": "http",
+      "name": "Get Resumes",
+      "filename": "get-resumes.bru",
+      "seq": 1,
+      "request": {
+        "url": "http://localhost:8000/api/resumesresumes?jd_id=1",
+        "method": "GET",
+        "headers": [],
+        "params": [
+          {
+            "name": "jd_id",
+            "value": "1",
+            "type": "query",
+            "enabled": true
+          }
+        ],
+        "body": {
+          "mode": "none",
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": []
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "none"
+        }
+      }
+    },
+    {
+      "type": "http",
+      "name": "get_jd_details",
+      "filename": "get_jd_details.bru",
+      "seq": 1,
+      "request": {
+        "url": "http://localhost:8000/api/jd/1",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": {
+          "mode": "none",
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": []
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "none"
+        }
+      }
+    },
+    {
+      "type": "http",
+      "name": "health",
+      "filename": "health.bru",
+      "seq": 1,
+      "request": {
+        "url": "http://localhost:8000/health",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": {
+          "mode": "none",
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": []
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "none"
+        }
+      }
+    },
+    {
+      "type": "http",
+      "name": "jdbuilder",
+      "filename": "jdbuilder.bru",
+      "seq": 1,
+      "request": {
+        "url": "http://localhost:8000/api/jd/builder",
+        "method": "POST",
+        "headers": [],
+        "params": [],
+        "body": {
+          "mode": "json",
+          "json": "{\n  \"raw_jd_content\": \"We are looking for a rockstar dev, must know everything about AI...\"\n}",
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": []
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "none"
+        }
+      }
+    },
+    {
+      "type": "http",
+      "name": "jdupload",
+      "filename": "jdupload.bru",
+      "seq": 1,
+      "request": {
+        "url": "http://localhost:8000/api/jd/upload",
+        "method": "POST",
+        "headers": [],
+        "params": [],
+        "body": {
+          "mode": "multipartForm",
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": []
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "none"
+        }
+      }
+    },
+    {
+      "type": "http",
+      "name": "login",
+      "filename": "login.bru",
+      "seq": 1,
+      "request": {
+        "url": "http://localhost:8000/api/auth/login",
+        "method": "POST",
+        "headers": [],
+        "params": [],
+        "body": {
+          "mode": "json",
+          "json": "{\n  \"user_name\": \"saikodati\",\n  \"password\": \"root\"\n}",
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": []
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "none"
+        }
+      }
+    },
+    {
+      "type": "http",
+      "name": "upload_resumes",
+      "filename": "upload_resumes.bru",
+      "seq": 1,
+      "request": {
+        "url": "http://localhost:8000/api/resumes/upload",
+        "method": "POST",
+        "headers": [],
+        "params": [],
+        "body": {
+          "mode": "multipartForm",
+          "formUrlEncoded": [],
+          "multipartForm": [
+            {
+              "type": "text",
+              "name": "jd_id",
+              "value": "1",
+              "enabled": true
+            }
+          ],
+          "file": []
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "none"
+        }
+      }
+    }
+  ],
+  "environments": [],
+  "root": {
+    "meta": {
+      "name": "HireSenceAPIs"
+    }
+  },
+  "brunoConfig": {
+    "version": "1",
+    "name": "HireSenceAPIs",
+    "type": "collection",
+    "ignore": [
+      "node_modules",
+      ".git"
+    ]
+  }
+}
