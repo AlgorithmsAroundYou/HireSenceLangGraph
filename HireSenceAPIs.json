@@ -1,246 +1,132 @@
 {
-  "name": "HireSenceAPIs",
-  "version": "1",
+  "version": 1,
+  "type": "collection",
+  "name": "HireSence LangGraph APIs",
   "items": [
     {
-      "type": "http",
-      "name": "chat",
-      "filename": "chat.bru",
-      "seq": 1,
+      "name": "Auth - Login",
       "request": {
-        "url": "http://localhost:8000/api/chat",
         "method": "POST",
-        "headers": [],
-        "params": [],
-        "body": {
-          "mode": "json",
-          "json": "{\n  \"message\": \"Hello, who are you?\"\n}",
-          "formUrlEncoded": [],
-          "multipartForm": [],
-          "file": []
-        },
-        "script": {},
-        "vars": {},
-        "assertions": [],
-        "tests": "",
-        "docs": "",
-        "auth": {
-          "mode": "none"
-        }
-      }
-    },
-    {
-      "type": "http",
-      "name": "Get Resumes",
-      "filename": "get-resumes.bru",
-      "seq": 1,
-      "request": {
-        "url": "http://localhost:8000/api/resumesresumes?jd_id=1",
-        "method": "GET",
-        "headers": [],
-        "params": [
-          {
-            "name": "jd_id",
-            "value": "1",
-            "type": "query",
-            "enabled": true
-          }
+        "url": "http://127.0.0.1:8000/auth/login",
+        "headers": [
+          { "name": "Content-Type", "value": "application/json" }
         ],
         "body": {
-          "mode": "none",
-          "formUrlEncoded": [],
-          "multipartForm": [],
-          "file": []
-        },
-        "script": {},
-        "vars": {},
-        "assertions": [],
-        "tests": "",
-        "docs": "",
-        "auth": {
-          "mode": "none"
+          "type": "json",
+          "json": {
+            "user_name": "saikodati",
+            "password": "root"
+          }
         }
       }
     },
     {
-      "type": "http",
-      "name": "get_jd_details",
-      "filename": "get_jd_details.bru",
-      "seq": 1,
+      "name": "Chat",
       "request": {
-        "url": "http://localhost:8000/api/jd/1",
-        "method": "GET",
-        "headers": [],
-        "params": [],
-        "body": {
-          "mode": "none",
-          "formUrlEncoded": [],
-          "multipartForm": [],
-          "file": []
-        },
-        "script": {},
-        "vars": {},
-        "assertions": [],
-        "tests": "",
-        "docs": "",
-        "auth": {
-          "mode": "none"
-        }
-      }
-    },
-    {
-      "type": "http",
-      "name": "health",
-      "filename": "health.bru",
-      "seq": 1,
-      "request": {
-        "url": "http://localhost:8000/health",
-        "method": "GET",
-        "headers": [],
-        "params": [],
-        "body": {
-          "mode": "none",
-          "formUrlEncoded": [],
-          "multipartForm": [],
-          "file": []
-        },
-        "script": {},
-        "vars": {},
-        "assertions": [],
-        "tests": "",
-        "docs": "",
-        "auth": {
-          "mode": "none"
-        }
-      }
-    },
-    {
-      "type": "http",
-      "name": "jdbuilder",
-      "filename": "jdbuilder.bru",
-      "seq": 1,
-      "request": {
-        "url": "http://localhost:8000/api/jd/builder",
         "method": "POST",
-        "headers": [],
-        "params": [],
+        "url": "http://127.0.0.1:8000/chat",
+        "headers": [
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "Authorization", "value": "Bearer demo-token" }
+        ],
         "body": {
-          "mode": "json",
-          "json": "{\n  \"raw_jd_content\": \"We are looking for a rockstar dev, must know everything about AI...\"\n}",
-          "formUrlEncoded": [],
-          "multipartForm": [],
-          "file": []
-        },
-        "script": {},
-        "vars": {},
-        "assertions": [],
-        "tests": "",
-        "docs": "",
-        "auth": {
-          "mode": "none"
+          "type": "json",
+          "json": {
+            "message": "Summarize the responsibilities of a data engineer."
+          }
         }
       }
     },
     {
-      "type": "http",
-      "name": "jdupload",
-      "filename": "jdupload.bru",
-      "seq": 1,
+      "name": "JD Builder",
       "request": {
-        "url": "http://localhost:8000/api/jd/upload",
         "method": "POST",
-        "headers": [],
-        "params": [],
+        "url": "http://127.0.0.1:8000/jd/builder",
+        "headers": [
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "Authorization", "value": "Bearer demo-token" }
+        ],
         "body": {
-          "mode": "multipartForm",
-          "formUrlEncoded": [],
-          "multipartForm": [],
-          "file": []
-        },
-        "script": {},
-        "vars": {},
-        "assertions": [],
-        "tests": "",
-        "docs": "",
-        "auth": {
-          "mode": "none"
+          "type": "json",
+          "json": {
+            "raw_jd_content": "We are looking for a senior backend engineer with experience in Python and FastAPI..."
+          }
         }
       }
     },
     {
-      "type": "http",
-      "name": "login",
-      "filename": "login.bru",
-      "seq": 1,
+      "name": "JD Upload",
       "request": {
-        "url": "http://localhost:8000/api/auth/login",
         "method": "POST",
-        "headers": [],
-        "params": [],
+        "url": "http://127.0.0.1:8000/jd/upload",
+        "headers": [
+          { "name": "accept", "value": "application/json" },
+          { "name": "Authorization", "value": "Bearer demo-token" }
+        ],
         "body": {
-          "mode": "json",
-          "json": "{\n  \"user_name\": \"saikodati\",\n  \"password\": \"root\"\n}",
-          "formUrlEncoded": [],
-          "multipartForm": [],
-          "file": []
-        },
-        "script": {},
-        "vars": {},
-        "assertions": [],
-        "tests": "",
-        "docs": "",
-        "auth": {
-          "mode": "none"
-        }
-      }
-    },
-    {
-      "type": "http",
-      "name": "upload_resumes",
-      "filename": "upload_resumes.bru",
-      "seq": 1,
-      "request": {
-        "url": "http://localhost:8000/api/resumes/upload",
-        "method": "POST",
-        "headers": [],
-        "params": [],
-        "body": {
-          "mode": "multipartForm",
-          "formUrlEncoded": [],
-          "multipartForm": [
+          "type": "form-data",
+          "formData": [
             {
+              "name": "file",
+              "type": "file",
+              "fileName": "sample_jd.txt"
+            },
+            {
+              "name": "uploaded_by",
               "type": "text",
-              "name": "jd_id",
-              "value": "1",
-              "enabled": true
+              "value": "saikodati"
             }
-          ],
-          "file": []
-        },
-        "script": {},
-        "vars": {},
-        "assertions": [],
-        "tests": "",
-        "docs": "",
-        "auth": {
-          "mode": "none"
+          ]
         }
       }
+    },
+    {
+      "name": "JD Details",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/jd/1",
+        "headers": [
+          { "name": "accept", "value": "application/json" },
+          { "name": "Authorization", "value": "Bearer demo-token" }
+        ]
+      }
+    },
+    {
+      "name": "Resume Upload",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/resumes/upload?jd_id=1",
+        "headers": [
+          { "name": "accept", "value": "application/json" },
+          { "name": "Authorization", "value": "Bearer demo-token" }
+        ],
+        "body": {
+          "type": "form-data",
+          "formData": [
+            {
+              "name": "file",
+              "type": "file",
+              "fileName": "candidate_resume.pdf"
+            },
+            {
+              "name": "uploaded_by",
+              "type": "text",
+              "value": "saikodati"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Resumes by JD",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/resumes?jd_id=1",
+        "headers": [
+          { "name": "accept", "value": "application/json" },
+          { "name": "Authorization", "value": "Bearer demo-token" }
+        ]
+      }
     }
-  ],
-  "environments": [],
-  "root": {
-    "meta": {
-      "name": "HireSenceAPIs"
-    }
-  },
-  "brunoConfig": {
-    "version": "1",
-    "name": "HireSenceAPIs",
-    "type": "collection",
-    "ignore": [
-      "node_modules",
-      ".git"
-    ]
-  }
+  ]
 }

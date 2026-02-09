@@ -162,6 +162,30 @@ By default, Uvicorn will usually start on `http://127.0.0.1:8000` (or whatever `
 
 ---
 
+## 7.1 Authentication & security token
+
+Most endpoints are protected and require a simple demo token. The login endpoint `/auth/login` returns a token field:
+
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "token": "demo-token"
+}
+```
+
+For now, the token is a static demo value (`demo-token`). In a real environment, this should be replaced with proper token or session management.
+
+To call protected endpoints from tools like Postman or curl, include the token as an `Authorization` header (conventionally as a Bearer token):
+
+```bash
+-H "Authorization: Bearer demo-token"
+```
+
+Any request to protected routes without a valid token will receive `401 Not authenticated`.
+
+---
+
 ## 8. Available endpoints (overview)
 
 Base URL: `http://127.0.0.1:8000`
@@ -275,7 +299,8 @@ curl -X POST "http://127.0.0.1:8000/auth/login" \
 ```json
 {
   "success": true,
-  "message": "Login successful"
+  "message": "Login successful",
+  "token": "demo-token"
 }
 ```
 
@@ -288,6 +313,7 @@ curl -X POST "http://127.0.0.1:8000/auth/login" \
 ```bash
 curl -X POST "http://127.0.0.1:8000/chat" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer demo-token" \
   -d '{
     "message": "Summarize the responsibilities of a data engineer."
   }'
@@ -310,6 +336,7 @@ curl -X POST "http://127.0.0.1:8000/chat" \
 ```bash
 curl -X POST "http://127.0.0.1:8000/jd/builder" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer demo-token" \
   -d '{
     "raw_jd_content": "We are looking for a senior backend engineer with experience in Python and FastAPI..."
   }'
@@ -329,13 +356,12 @@ curl -X POST "http://127.0.0.1:8000/jd/builder" \
 
 ### 11.4 `POST /jd/upload`
 
-Upload a JD file (e.g., `sample_jd.txt`) and associate it with a user name.
-
 **Request**
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/jd/upload" \
   -H "accept: application/json" \
+  -H "Authorization: Bearer demo-token" \
   -H "Content-Type: multipart/form-data" \
   -F "file=@sample_jd.txt" \
   -F "uploaded_by=saikodati"
@@ -355,12 +381,12 @@ curl -X POST "http://127.0.0.1:8000/jd/upload" \
 
 ### 11.5 `GET /jd/{jd_id}`
 
-Fetch JD details and download path.
-
 **Request**
 
 ```bash
-curl -X GET "http://127.0.0.1:8000/jd/1" -H "accept: application/json"
+curl -X GET "http://127.0.0.1:8000/jd/1" \
+  -H "accept: application/json" \
+  -H "Authorization: Bearer demo-token"
 ```
 
 **Sample response**
@@ -379,13 +405,12 @@ curl -X GET "http://127.0.0.1:8000/jd/1" -H "accept: application/json"
 
 ### 11.6 `POST /resumes/upload`
 
-Upload a resume file and link it to an existing JD via `jd_id`.
-
 **Request**
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/resumes/upload?jd_id=1" \
   -H "accept: application/json" \
+  -H "Authorization: Bearer demo-token" \
   -H "Content-Type: multipart/form-data" \
   -F "file=@candidate_resume.pdf" \
   -F "uploaded_by=saikodati"
@@ -406,12 +431,12 @@ curl -X POST "http://127.0.0.1:8000/resumes/upload?jd_id=1" \
 
 ### 11.7 `GET /resumes?jd_id={id}`
 
-List all resumes associated with a given JD.
-
 **Request**
 
 ```bash
-curl -X GET "http://127.0.0.1:8000/resumes?jd_id=1" -H "accept: application/json"
+curl -X GET "http://127.0.0.1:8000/resumes?jd_id=1" \
+  -H "accept: application/json" \
+  -H "Authorization: Bearer demo-token"
 ```
 
 **Sample response**

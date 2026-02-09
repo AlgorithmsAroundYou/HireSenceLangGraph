@@ -18,6 +18,9 @@ router = APIRouter()
 agent = build_agent()
 
 
+DEMO_AUTH_TOKEN = "demo-token"  # simple placeholder; replace with real auth later
+
+
 class ChatRequest(BaseModel):
     message: str
 
@@ -34,6 +37,7 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     success: bool
     message: str
+    token: Optional[str] = None
 
 
 class JobReviewRequest(BaseModel):
@@ -118,8 +122,27 @@ def get_db():
         db.close()
 
 
+def get_current_user(token: str = Depends(lambda: None)):
+    """Very simple token check placeholder.
+
+    In production replace this with proper session/JWT handling.
+    """
+    # In FastAPI you'd normally get the token from headers or cookies.
+    # Here we expect an `Authorization: Bearer <token>` header; FastAPI
+    # can't grab it via lambda, so this is a stub hook for future work.
+    # For now, callers should send token via `Authorization` header and
+    # you can wire a real dependency later.
+    # This implementation always requires DEMO_AUTH_TOKEN when wired.
+    if token != DEMO_AUTH_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+    return {"user_name": "demo"}
+
+
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, user=Depends(get_current_user)):
     result = agent.invoke({"messages": [HumanMessage(content=request.message)]})
     last_message = result["messages"][-1]
     return ChatResponse(response=last_message.content)
@@ -141,11 +164,12 @@ async def login(request: LoginRequest, db=Depends(get_db)):
             detail="User is inactive",
         )
 
-    return LoginResponse(success=True, message="Login successful")
+    # For now, return a static demo token. Replace with real token/session later.
+    return LoginResponse(success=True, message="Login successful", token=DEMO_AUTH_TOKEN)
 
 
 @router.post("/jd/builder", response_model=JobReviewResponse)
-async def review_job_description(request: JobReviewRequest):
+async def review_job_description(request: JobReviewRequest, user=Depends(get_current_user)):
     messages = [
         SystemMessage(content=REVIEW_JOB_DESCRIPTION_SYSTEM_PROMPT),
         HumanMessage(content=request.raw_jd_content),
@@ -179,6 +203,7 @@ async def upload_job_description(
     file: UploadFile = File(...),
     uploaded_by: Optional[str] = None,
     db=Depends(get_db),
+    user=Depends(get_current_user),
 ):
     """Upload a JD file, save it locally, and store metadata in DB."""
 
@@ -210,7 +235,7 @@ async def upload_job_description(
 
 
 @router.get("/jd/{jd_id}", response_model=JobDetailsResponse)
-async def get_job_description_details(jd_id: int, db=Depends(get_db)):
+async def get_job_description_details(jd_id: int, db=Depends(get_db), user=Depends(get_current_user)):
     jd = db.query(JobDescription).filter(JobDescription.jd_id == jd_id).first()
     if not jd:
         raise HTTPException(
@@ -236,6 +261,7 @@ async def upload_resume(
     file: UploadFile = File(...),
     uploaded_by: Optional[str] = None,
     db=Depends(get_db),
+    user=Depends(get_current_user),
 ):
     """Upload a resume file linked to a JD and persist metadata.
 
@@ -281,7 +307,7 @@ async def upload_resume(
 
 
 @router.get("/resumes", response_model=ResumeListResponse)
-async def list_resumes_by_jd(jd_id: int, db=Depends(get_db)):
+async def list_resumes_by_jd(jd_id: int, db=Depends(get_db), user=Depends(get_current_user)):
     """Return list of resumes for a given jd_id with file locations."""
     resumes = db.query(Resume).filter(Resume.jd_id == jd_id).all()
 
