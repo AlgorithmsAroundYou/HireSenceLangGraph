@@ -12,6 +12,7 @@ from app.models.resume import Resume
 from app.prompts.review_job_description_prompt import (
     REVIEW_JOB_DESCRIPTION_SYSTEM_PROMPT,
 )
+import markdown
 
 
 router = APIRouter()
@@ -43,6 +44,8 @@ class LoginResponse(BaseModel):
 class JobReviewRequest(BaseModel):
     raw_jd_content: str
 
+class JobReviewResponse1(BaseModel):
+    message: str
 
 class JobReviewResponse(BaseModel):
     updated_jd_content: str
@@ -142,7 +145,7 @@ def get_current_user(token: str = Depends(lambda: None)):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, user=Depends(get_current_user)):
+async def chat(request: ChatRequest):
     result = agent.invoke({"messages": [HumanMessage(content=request.message)]})
     last_message = result["messages"][-1]
     return ChatResponse(response=last_message.content)
@@ -168,8 +171,8 @@ async def login(request: LoginRequest, db=Depends(get_db)):
     return LoginResponse(success=True, message="Login successful", token=DEMO_AUTH_TOKEN)
 
 
-@router.post("/jd/builder", response_model=JobReviewResponse)
-async def review_job_description(request: JobReviewRequest, user=Depends(get_current_user)):
+@router.post("/jd/builder", response_model=JobReviewResponse1)
+async def review_job_description(request: JobReviewRequest):
     messages = [
         SystemMessage(content=REVIEW_JOB_DESCRIPTION_SYSTEM_PROMPT),
         HumanMessage(content=request.raw_jd_content),
@@ -177,25 +180,27 @@ async def review_job_description(request: JobReviewRequest, user=Depends(get_cur
 
     result = agent.invoke({"messages": messages})
     last_message = result["messages"][-1]
+    html_output = markdown.markdown(last_message.content)
+    return JobReviewResponse1(message=html_output)
 
     # The model is instructed to return JSON; parse defensively
-    import json
+    # import json
 
-    try:
-        payload = json.loads(last_message.content)
-    except json.JSONDecodeError:
-        # Fallback: wrap raw content if model didn't follow instructions
-        return JobReviewResponse(
-            updated_jd_content=last_message.content,
-            score="",
-            suggestions="Model did not return valid JSON; please try again.",
-        )
+    # try:
+    #     payload = json.loads(last_message.content)
+    # except json.JSONDecodeError:
+    #     # Fallback: wrap raw content if model didn't follow instructions
+    #     return JobReviewResponse(
+    #         updated_jd_content=last_message.content,
+    #         score="",
+    #         suggestions="Model did not return valid JSON; please try again.",
+    #     )
 
-    return JobReviewResponse(
-        updated_jd_content=payload.get("updated_jd_content", ""),
-        score=str(payload.get("score", "")),
-        suggestions=payload.get("suggestions", ""),
-    )
+    # return JobReviewResponse(
+    #     updated_jd_content=payload.get("updated_jd_content", ""),
+    #     score=str(payload.get("score", "")),
+    #     suggestions=payload.get("suggestions", ""),
+    # )
 
 
 @router.post("/jd/upload", response_model=JobUploadResponse)

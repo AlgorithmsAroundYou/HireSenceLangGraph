@@ -1,7 +1,10 @@
+
 from langgraph.graph import StateGraph, MessagesState
 from langchain_openai import ChatOpenAI
 from app.core.config import settings
-
+from langchain_community.llms import Ollama
+from langgraph.prebuilt import ToolNode
+from langchain_core.tools import tool
 
 def _build_openai_llm():
     return ChatOpenAI(
@@ -12,18 +15,19 @@ def _build_openai_llm():
 
 def _build_deepseek_llm():
     # Assuming DeepSeek exposes an OpenAI-compatible API
-    return ChatOpenAI(
+    return Ollama(
         model=settings.llm_model,
-        api_key=settings.deepseek_api_key or settings.openai_api_key,
+        temperature=0.5,
+        # api_key=settings.deepseek_api_key or settings.openai_api_key,
         base_url=settings.deepseek_base_url,
     )
 
-
 def _build_mistral_llm():
     # Assuming Mistral is exposed via an OpenAI-compatible HTTP API
-    return ChatOpenAI(
+    return Ollama(
         model=settings.llm_model,
-        api_key=settings.mistral_api_key,
+        temperature=0.5,
+        #api_key=settings.mistral_api_key,
         base_url=settings.mistral_base_url,
     )
 
@@ -39,6 +43,14 @@ def build_llm():
     raise ValueError(f"Unsupported LLM_PROVIDER: {settings.llm_provider}")
 
 
+@tool
+def add(a: int, b: int) -> int:
+    """Adds two numbers together and returns the sum."""
+    return a + b
+
+# List of tools to pass to the agent
+tools = [add]
+
 def build_agent():
     llm = build_llm()
 
@@ -47,8 +59,9 @@ def build_agent():
         return {"messages": state["messages"] + [response]}
 
     graph = StateGraph(MessagesState)
-    graph.add_node("model", call_model)
-    graph.set_entry_point("model")
-    graph.set_finish_point("model")
+    graph.add_node("agent", call_model)
+    graph.add_node("tools", ToolNode(tools))
+    graph.set_entry_point("agent")
+    graph.set_finish_point("agent")
 
     return graph.compile()
