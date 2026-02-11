@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, func
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Float, func
 
 from .db import Base
 
@@ -10,6 +10,38 @@ class Resume(Base):
     jd_id = Column(Integer, ForeignKey("job_description_details.jd_id"), nullable=False)
     file_name = Column(String, nullable=False)
     file_location = Column(String, nullable=False)
-    created_date = Column(DateTime, nullable=False, server_default=func.now())
+
+    # candidate info
+    candidate_name = Column(String, nullable=True)
+    candidate_email = Column(String, nullable=True)
+    candidate_phone = Column(String, nullable=True)
+
+    # AI/processing metadata
+    parsed_summary = Column(String, nullable=True)
+    parsed_skills = Column(String, nullable=True)
+    match_score = Column(Float, nullable=True)
+
+    # status & audit
+    status = Column(String, nullable=False, default="new")
     uploaded_by = Column(String, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True, server_default="1")
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    updated_at = Column(DateTime, nullable=True)
+
+
+class ResumeAnalysis(Base):
+    __tablename__ = "resume_analysis_details"
+
+    analysis_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    resume_id = Column(Integer, ForeignKey("resume_details.resume_id"), nullable=False)
+    jd_id = Column(Integer, ForeignKey("job_description_details.jd_id"), nullable=False)
+
+    # Raw JSON from LLM
+    analysis_json = Column(String, nullable=False)
+
+    # Optional extracted field for quick filtering/sorting
+    match_score = Column(Float, nullable=True)
+
+    # audit
+    processed_at = Column(DateTime, nullable=False, server_default=func.now())
+    processed_by = Column(String, nullable=True)

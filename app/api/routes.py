@@ -1,151 +1,51 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body
 from langchain_core.messages import HumanMessage, SystemMessage
-import os
 from typing import Optional, List
+import json
 
 from app.agents.agent import build_agent
-from app.models.db import SessionLocal
 from app.models.user import User
 from app.models.job_description import JobDescription
-from app.models.resume import Resume
 from app.prompts.review_job_description_prompt import (
     REVIEW_JOB_DESCRIPTION_SYSTEM_PROMPT,
 )
-import markdown
+from app.models.api import (
+    ChatRequest,
+    ChatResponse,
+    LoginRequest,
+    LoginResponse,
+    JobReviewResponse1,
+    JobReviewResponse,
+    JobUploadResponse,
+    JobDetailsResponse,
+    JobAnalyzeResponse,
+    ResumeUploadResponse,
+    ResumeSummary,
+    ResumeListResponse,
+    ResumeProcessOnceResponse,
+)
+from app.services.jd_service import (
+    create_job_description,
+    get_job_description_details as get_jd_details_svc,
+    analyze_job_description,
+)
+from app.services.resume_service import (
+    create_resume,
+    list_resumes_by_jd as list_resumes_svc,
+)
+from app.services.auth_service import get_db, create_access_token, get_current_user
+from app.services.file_service import save_upload_file
+from app.core.config import settings
+from app.validations.jd_validations import validate_jd_upload
+from app.services.resume_processing_service import run_once as run_resume_process_once
 
 
 router = APIRouter()
 agent = build_agent()
 
 
-DEMO_AUTH_TOKEN = "demo-token"  # simple placeholder; replace with real auth later
-
-
-class ChatRequest(BaseModel):
-    message: str
-
-
-class ChatResponse(BaseModel):
-    response: str
-
-
-class LoginRequest(BaseModel):
-    user_name: str
-    password: str
-
-
-class LoginResponse(BaseModel):
-    success: bool
-    message: str
-    token: Optional[str] = None
-
-
-class JobReviewRequest(BaseModel):
-    raw_jd_content: str
-
-class JobReviewResponse1(BaseModel):
-    message: str
-
-class JobReviewResponse(BaseModel):
-    updated_jd_content: str
-    score: str
-    suggestions: str
-
-
-class JobUploadResponse(BaseModel):
-    jd_id: int
-    file_name: str
-    file_saved_location: str
-
-
-class JobDetailsResponse(BaseModel):
-    jd_id: int
-    file_name: str
-    uploaded_by: Optional[str] = None
-    created_date: str
-    download: str
-
-
-class ResumeUploadResponse(BaseModel):
-    resume_id: int
-    jd_id: int
-    file_name: str
-    file_location: str
-
-
-class ResumeSummary(BaseModel):
-    resume_id: int
-    jd_id: int
-    file_name: str
-    file_location: str
-    uploaded_by: Optional[str] = None
-    created_date: Optional[str] = None
-
-
-class ResumeListResponse(BaseModel):
-    resumes: List[ResumeSummary]
-
-
-UPLOAD_DIR = "uploaded_jds"
-ALLOWED_EXTENSIONS = {"txt", "pdf", "doc", "docx"}
-
-
-def save_upload_file(upload_file: UploadFile, destination_dir: str) -> str:
-    """Save an uploaded file to a destination directory and return the full path.
-
-    This helper is reusable for other services.
-    """
-
-    os.makedirs(destination_dir, exist_ok=True)
-
-    # Basic extension validation
-    _, ext = os.path.splitext(upload_file.filename or "")
-    ext = ext.lstrip(".").lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file type: .{ext}",
-        )
-
-    safe_name = upload_file.filename or "uploaded_file"
-    dest_path = os.path.join(destination_dir, safe_name)
-
-    with open(dest_path, "wb") as out_file:
-        out_file.write(upload_file.file.read())
-
-    return dest_path
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-def get_current_user(token: str = Depends(lambda: None)):
-    """Very simple token check placeholder.
-
-    In production replace this with proper session/JWT handling.
-    """
-    # In FastAPI you'd normally get the token from headers or cookies.
-    # Here we expect an `Authorization: Bearer <token>` header; FastAPI
-    # can't grab it via lambda, so this is a stub hook for future work.
-    # For now, callers should send token via `Authorization` header and
-    # you can wire a real dependency later.
-    # This implementation always requires DEMO_AUTH_TOKEN when wired.
-    if token != DEMO_AUTH_TOKEN:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
-    return {"user_name": "demo"}
-
-
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, user: User = Depends(get_current_user)):
     result = agent.invoke({"messages": [HumanMessage(content=request.message)]})
     last_message = result["messages"][-1]
     return ChatResponse(response=last_message.content)
@@ -153,9 +53,13 @@ async def chat(request: ChatRequest):
 
 @router.post("/auth/login", response_model=LoginResponse)
 async def login(request: LoginRequest, db=Depends(get_db)):
-    user = db.query(User).filter(User.user_name == request.user_name).first()
+    from app.models.user import User as UserModel
 
-    if user is None or user.password != request.password:
+    user = db.query(UserModel).filter(UserModel.user_name == request.user_name).first()
+
+    # NOTE: currently comparing plain text password to password_hash placeholder.
+    # Replace this with proper hashing & verification later.
+    if user is None or user.password_hash != request.password:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
@@ -167,40 +71,39 @@ async def login(request: LoginRequest, db=Depends(get_db)):
             detail="User is inactive",
         )
 
-    # For now, return a static demo token. Replace with real token/session later.
-    return LoginResponse(success=True, message="Login successful", token=DEMO_AUTH_TOKEN)
+    access_token = create_access_token(data={"sub": user.user_name})
+
+    return LoginResponse(
+        success=True,
+        message="Login successful",
+        token=access_token,
+    )
 
 
 @router.post("/jd/builder", response_model=JobReviewResponse1)
-async def review_job_description(request: JobReviewRequest):
+async def review_job_description(
+    raw_jd_content: str = Body(..., media_type="text/plain"),
+    user: User = Depends(get_current_user),
+):
+    """Review a job description from raw text body."""
+
     messages = [
         SystemMessage(content=REVIEW_JOB_DESCRIPTION_SYSTEM_PROMPT),
-        HumanMessage(content=request.raw_jd_content),
+        HumanMessage(content=raw_jd_content),
     ]
 
     result = agent.invoke({"messages": messages})
     last_message = result["messages"][-1]
-    html_output = markdown.markdown(last_message.content)
-    return JobReviewResponse1(message=html_output)
 
-    # The model is instructed to return JSON; parse defensively
-    # import json
+    try:
+        parsed = json.loads(last_message.content)
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Model returned invalid JSON. Please try again or contact support.",
+        )
 
-    # try:
-    #     payload = json.loads(last_message.content)
-    # except json.JSONDecodeError:
-    #     # Fallback: wrap raw content if model didn't follow instructions
-    #     return JobReviewResponse(
-    #         updated_jd_content=last_message.content,
-    #         score="",
-    #         suggestions="Model did not return valid JSON; please try again.",
-    #     )
-
-    # return JobReviewResponse(
-    #     updated_jd_content=payload.get("updated_jd_content", ""),
-    #     score=str(payload.get("score", "")),
-    #     suggestions=payload.get("suggestions", ""),
-    # )
+    return JobReviewResponse1(message=parsed)
 
 
 @router.post("/jd/upload", response_model=JobUploadResponse)
@@ -208,12 +111,20 @@ async def upload_job_description(
     file: UploadFile = File(...),
     uploaded_by: Optional[str] = None,
     db=Depends(get_db),
-    user=Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    """Upload a JD file, save it locally, and store metadata in DB."""
+    """Upload a JD file, validate, save it locally, store metadata in DB, and trigger analysis.
 
+    If analysis fails, the upload still succeeds; errors are surfaced via logs/HTTP 500
+    only for catastrophic failures (e.g., cannot read file).
+    """
+
+    # 1) Validate file (extension, size, etc.)
+    validate_jd_upload(file)
+
+    # 2) Persist file to disk
     try:
-        saved_path = save_upload_file(file, UPLOAD_DIR)
+        saved_path = save_upload_file(file, settings.upload_dir_jd)
     except HTTPException:
         raise
     except Exception as exc:
@@ -222,25 +133,64 @@ async def upload_job_description(
             detail=f"Failed to save file: {exc}",
         )
 
-    jd = JobDescription(
+    # 3) Always use logged-in user as uploaded_by; ignore explicit parameter
+    effective_uploaded_by = user.user_name
+
+    upload_resp = create_job_description(
+        db,
         file_name=file.filename or "uploaded_file",
         file_saved_location=saved_path,
-        uploaded_by=uploaded_by,
-        is_active=True,
-    )
-    db.add(jd)
-    db.commit()
-    db.refresh(jd)
-
-    return JobUploadResponse(
-        jd_id=jd.jd_id,
-        file_name=jd.file_name,
-        file_saved_location=jd.file_saved_location,
+        uploaded_by=effective_uploaded_by,
     )
 
+    # Best-effort JD analysis using the same logic as /jd/{jd_id}/analyze
+    try:
+        # Read raw text from the JD file
+        with open(saved_path, "r", encoding="utf-8", errors="ignore") as f:
+            raw_jd_content = f.read()
 
-@router.get("/jd/{jd_id}", response_model=JobDetailsResponse)
-async def get_job_description_details(jd_id: int, db=Depends(get_db), user=Depends(get_current_user)):
+        messages = [
+            SystemMessage(content=REVIEW_JOB_DESCRIPTION_SYSTEM_PROMPT),
+            HumanMessage(content=raw_jd_content),
+        ]
+
+        result = agent.invoke({"messages": messages})
+        last_message = result["messages"][-1]
+
+        parsed = json.loads(last_message.content)
+        if isinstance(parsed, dict):
+            title = parsed.get("title")
+            summary = parsed.get("summary")
+
+            analyze_job_description(
+                db,
+                jd_id=upload_resp.jd_id,
+                title=title,
+                parsed_summary=summary,
+                reviewed_by=user.user_name,
+            )
+    except json.JSONDecodeError:
+        # Ignore analysis failure; upload already succeeded
+        pass
+    except Exception:
+        # Swallow analysis errors to not break upload; can be logged later
+        pass
+
+    return upload_resp
+
+
+@router.post("/jd/{jd_id}/analyze", response_model=JobAnalyzeResponse)
+async def analyze_job_description_endpoint(
+    jd_id: int,
+    db=Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Analyze an uploaded JD using the agent and persist structured fields.
+
+    Populates title, parsed_summary, last_reviewed_at, last_reviewed_by, updated_at.
+    """
+
+    # Load JD to get file path
     jd = db.query(JobDescription).filter(JobDescription.jd_id == jd_id).first()
     if not jd:
         raise HTTPException(
@@ -248,86 +198,156 @@ async def get_job_description_details(jd_id: int, db=Depends(get_db), user=Depen
             detail="Job description not found",
         )
 
-    # Format created_date as ISO string if not None
-    created_str = jd.created_date.isoformat() if jd.created_date else ""
+    # Read raw text from the JD file
+    try:
+        with open(jd.file_saved_location, "r", encoding="utf-8", errors="ignore") as f:
+            raw_jd_content = f.read()
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Stored JD file not found on server.",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to read JD file: {exc}",
+        )
 
-    return JobDetailsResponse(
+    # Call agent with same prompt as /jd/builder
+    messages = [
+        SystemMessage(content=REVIEW_JOB_DESCRIPTION_SYSTEM_PROMPT),
+        HumanMessage(content=raw_jd_content),
+    ]
+
+    result = agent.invoke({"messages": messages})
+    last_message = result["messages"][-1]
+
+    try:
+        parsed = json.loads(last_message.content)
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Model returned invalid JSON during JD analysis.",
+        )
+
+    # Extract fields from parsed JSON; adjust keys to your JD review schema
+    title = parsed.get("title") if isinstance(parsed, dict) else None
+    summary = parsed.get("summary") if isinstance(parsed, dict) else None
+
+    # Persist analysis results
+    analyze_job_description(
+        db,
+        jd_id=jd_id,
+        title=title,
+        parsed_summary=summary,
+        reviewed_by=user.user_name,
+    )
+
+    # Build response with timestamps from DB
+    jd = db.query(JobDescription).filter(JobDescription.jd_id == jd_id).first()
+
+    return JobAnalyzeResponse(
         jd_id=jd.jd_id,
-        file_name=jd.file_name,
-        uploaded_by=jd.uploaded_by,
-        created_date=created_str,
-        download=jd.file_saved_location,
+        title=jd.title,
+        parsed_summary=jd.parsed_summary,
+        last_reviewed_at=jd.last_reviewed_at.isoformat() if jd.last_reviewed_at else None,
+        last_reviewed_by=jd.last_reviewed_by,
     )
 
 
-@router.post("/resumes/upload", response_model=ResumeUploadResponse)
+@router.get("/jd/{jd_id}", response_model=JobDetailsResponse)
+async def get_job_description_details(
+    jd_id: int, db=Depends(get_db), user: User = Depends(get_current_user)
+):
+    jd_details = get_jd_details_svc(db, jd_id)
+    if jd_details is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job description not found",
+        )
+
+    return jd_details
+
+
+@router.post("/resumes/upload", response_model=List[ResumeUploadResponse])
 async def upload_resume(
     jd_id: int,
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
     uploaded_by: Optional[str] = None,
     db=Depends(get_db),
-    user=Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    """Upload a resume file linked to a JD and persist metadata.
+    """Upload one or more resume files linked to a JD and persist metadata.
 
     - jd_id is mandatory and must reference an existing job_description_details row.
+    - Up to 10 files per request are allowed.
     - uploaded_by can be passed explicitly (e.g., current username).
     """
 
-    # Ensure JD exists
-    jd = db.query(JobDescription).filter(JobDescription.jd_id == jd_id).first()
+    from app.models.job_description import JobDescription as JDModel
+
+    jd = db.query(JDModel).filter(JDModel.jd_id == jd_id).first()
     if not jd:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid jd_id: job description does not exist",
         )
 
-    try:
-        saved_path = save_upload_file(file, UPLOAD_DIR)
-    except HTTPException:
-        raise
-    except Exception as exc:
+    if not files:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save file: {exc}",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one resume file must be provided",
         )
 
-    resume = Resume(
-        jd_id=jd_id,
-        file_name=file.filename or "uploaded_resume",
-        file_location=saved_path,
-        uploaded_by=uploaded_by,
-        is_active=True,
-    )
-    db.add(resume)
-    db.commit()
-    db.refresh(resume)
+    if len(files) > 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A maximum of 10 resume files can be uploaded at once",
+        )
 
-    return ResumeUploadResponse(
-        resume_id=resume.resume_id,
-        jd_id=resume.jd_id,
-        file_name=resume.file_name,
-        file_location=resume.file_location,
-    )
+    responses: List[ResumeUploadResponse] = []
+    effective_uploaded_by = uploaded_by or user.user_name
+
+    for file in files:
+        # Validate each file (extension, size, etc.)
+        validate_jd_upload(file)
+
+        try:
+            saved_path = save_upload_file(file, settings.upload_dir_resume)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to save file '{file.filename}': {exc}",
+            )
+
+        resp = create_resume(
+            db,
+            jd_id=jd_id,
+            file_name=file.filename or "uploaded_resume",
+            file_location=saved_path,
+            uploaded_by=effective_uploaded_by,
+        )
+        responses.append(resp)
+
+    return responses
 
 
 @router.get("/resumes", response_model=ResumeListResponse)
-async def list_resumes_by_jd(jd_id: int, db=Depends(get_db), user=Depends(get_current_user)):
+async def list_resumes_by_jd(
+    jd_id: int, db=Depends(get_db), user: User = Depends(get_current_user)
+):
     """Return list of resumes for a given jd_id with file locations."""
-    resumes = db.query(Resume).filter(Resume.jd_id == jd_id).all()
+    return list_resumes_svc(db, jd_id)
 
-    summaries: List[ResumeSummary] = []
-    for r in resumes:
-        created_str = r.created_date.isoformat() if r.created_date else ""
-        summaries.append(
-            ResumeSummary(
-                resume_id=r.resume_id,
-                jd_id=r.jd_id,
-                file_name=r.file_name,
-                file_location=r.file_location,
-                uploaded_by=r.uploaded_by,
-                created_date=created_str,
-            )
-        )
 
-    return ResumeListResponse(resumes=summaries)
+@router.post("/resumes/process-once", response_model=ResumeProcessOnceResponse)
+async def process_resumes_once(user: User = Depends(get_current_user)):
+    """Trigger a single batch of resume processing.
+
+    Uses the same logic as the background worker, respecting batch size config.
+    """
+
+    processed = await run_resume_process_once(processed_by=user.user_name)
+    return ResumeProcessOnceResponse(processed_count=processed)

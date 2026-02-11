@@ -1,14 +1,19 @@
 # HireSence LangGraph
 
-HireSence LangGraph is a FastAPI-based backend service that helps manage and review job descriptions and related resumes.
+HireSence LangGraph is a FastAPI-based backend service that helps manage and review software job descriptions (JDs) and related resumes, powered by LangGraph / LangChain and an LLM.
 
 Core features:
-- Chat endpoint backed by LangGraph / LangChain to interact with an LLM.
-- Job Description (JD) review endpoint (`/jd/builder`) that refines and scores a raw JD.
-- JD upload endpoint (`/jd/upload`) that stores JD files on disk and persists metadata in SQLite.
-- Resume upload endpoint (`/resumes/upload`) linked to a JD.
-- Resume listing endpoint (`/resumes`) to fetch resumes for a given JD.
-- Basic user table and login endpoint (`/auth/login`).
+- **Chat endpoint** backed by LangGraph / LangChain to interact with an LLM.
+- **Job Description (JD) review endpoint** (`POST /jd/builder`) that accepts raw JD text and returns a **structured JSON evaluation + improved JD**.
+- **JD upload endpoint** (`POST /jd/upload`) that stores JD files on disk and persists metadata in SQLite.
+- **Resume upload endpoint** (`POST /resumes/upload`) linked to a JD.
+- **Resume listing endpoint** (`GET /resumes`) to fetch resumes for a given JD.
+- **Basic user table and login** endpoint (`POST /auth/login`).
+
+The JD review logic uses a strict system prompt that:
+- Enforces **no hallucinations** for critical fields (company, location, stack, etc.).
+- Evaluates JDs against a **core checklist** (title, stack, infra/DevOps, responsibilities, experience, culture, work model, domain, company context, work culture, growth & impact).
+- Always returns an **`improved_jd`** string with clear section headers (Role Title, Role Overview, Responsibilities, Required Skills & Experience, Domain Knowledge, Work Model & Location, Work Culture & Ways of Working), using placeholders for missing information.
 
 The app uses:
 - FastAPI
@@ -100,7 +105,7 @@ By default, the app uses a SQLite database file named `dev.db` at the project ro
 - `job_description_details`
 - `resume_details`
 
-If the app doesnt automatically initialize the database, you can run the SQL manually.
+If the app doesn’t automatically initialize the database, you can run the SQL manually.
 
 ### Run the init script with SQLite (macOS & Windows)
 
@@ -164,25 +169,25 @@ By default, Uvicorn will usually start on `http://127.0.0.1:8000` (or whatever `
 
 ## 7.1 Authentication & security token
 
-Most endpoints are protected and require a simple demo token. The login endpoint `/auth/login` returns a token field:
+Most endpoints are protected and require a token. The login endpoint `/auth/login` returns a `token` field.
+
+Example response:
 
 ```json
 {
   "success": true,
   "message": "Login successful",
-  "token": "demo-token"
+  "token": "<your-token>"
 }
 ```
-
-For now, the token is a static demo value (`demo-token`). In a real environment, this should be replaced with proper token or session management.
 
 To call protected endpoints from tools like Postman or curl, include the token as an `Authorization` header (conventionally as a Bearer token):
 
 ```bash
--H "Authorization: Bearer demo-token"
+-H "Authorization: Bearer <your-token>"
 ```
 
-Any request to protected routes without a valid token will receive `401 Not authenticated`.
+Any request to protected routes without a valid token will receive `401 Not authenticated` or `403 Forbidden` depending on user status.
 
 ---
 
@@ -190,70 +195,192 @@ Any request to protected routes without a valid token will receive `401 Not auth
 
 Base URL: `http://127.0.0.1:8000`
 
-- `POST /chat`
-  - Body: `{ "message": "..." }`
-  - Returns: LLM response.
+### 8.1 `POST /chat`
 
-- `POST /auth/login`
-  - Body: `{ "user_name": "...", "password": "..." }`
-  - Returns: login result; uses `user_details` table.
+- **Auth**: Required.
+- **Body (JSON)**:
 
-- `POST /jd/builder`
-  - Body: `{ "raw_jd_content": "..." }`
-  - Returns: structured JD review (`updated_jd_content`, `score`, `suggestions`).
+  ```json
+  { "message": "..." }
+  ```
 
-- `POST /jd/upload`
-  - Multipart form-data
-    - `file`: JD file (`.txt`, `.pdf`, `.doc`, `.docx`)
-    - `uploaded_by`: optional string (e.g. username)
-  - Saves file under `uploaded_jds/` and metadata to `job_description_details`.
+- **Response**:
 
-- `GET /jd/{jd_id}`
-  - Path parameter: `jd_id`
-  - Returns JD metadata including `download` path.
+  ```json
+  { "response": "LLM response text" }
+  ```
 
-- `POST /resumes/upload`
-  - Multipart form-data + query/field:
-    - `jd_id`: integer (required)  must reference an existing JD
-    - `file`: resume file (`.txt`, `.pdf`, `.doc`, `.docx`)
-    - `uploaded_by`: optional string
-  - Saves file and metadata to `resume_details`.
+---
 
-- `GET /resumes?jd_id={id}`
-  - Query parameter: `jd_id`
-  - Returns list of resumes for that JD, including file locations.
+### 8.2 `POST /auth/login`
 
-You can also explore and test the API using FastAPIs automatic docs:
+- **Auth**: Not required.
+- **Body (JSON)**:
+
+  ```json
+  { "user_name": "...", "password": "..." }
+  ```
+
+- **Response**:
+
+  ```json
+  {
+    "success": true,
+    "message": "Login successful",
+    "token": "<your-token>"
+  }
+  ```
+
+---
+
+### 8.3 `POST /jd/builder`
+
+JD review & builder endpoint using the new **raw text + structured JSON** contract.
+
+- **Auth**: Required.
+- **Headers**:
+  - `Authorization: Bearer <your-token>`
+  - `Content-Type: text/plain; charset=utf-8`
+- **Body**: Raw text containing the job description (can be long, include emojis and special characters).
+
+  Example request (curl):
+
+  ```bash
+  curl -X POST "http://127.0.0.1:8000/jd/builder" \
+    -H "Authorization: Bearer <your-token>" \
+    -H "Content-Type: text/plain; charset=utf-8" \
+    --data-binary $'Senior Backend Engineer\n\nWe are looking for a Senior Backend Engineer with experience in Java, Spring Boot, and microservices...' 
+  ```
+
+- **Response model**: `JobReviewResponse1`
+
+  ```jsonc
+  {
+    "message": {
+      "jd_strength_score": 0-100,
+      "checkpoints": {
+        "standardized_job_title": "PASS|WEAK|MISSING",
+        "primary_technical_stack": "PASS|WEAK|MISSING",
+        "infrastructure_devops": "PASS|WEAK|MISSING",
+        "responsibilities": "PASS|WEAK|MISSING",
+        "experience": "PASS|WEAK|MISSING",
+        "engineering_culture": "PASS|WEAK|MISSING",
+        "education_equivalent": "PASS|WEAK|MISSING",
+        "soft_skills": "PASS|WEAK|MISSING",
+        "work_model_location": "PASS|WEAK|MISSING",
+        "domain_knowledge_business_context": "PASS|WEAK|MISSING",
+        "company_product_context": "PASS|WEAK|MISSING",
+        "work_culture_ways_of_working": "PASS|WEAK|MISSING",
+        "growth_impact": "PASS|WEAK|MISSING"
+      },
+      "critical_gaps_technical": ["..."],
+      "critical_gaps_administrative": ["..."],
+      "dx_suggestions": ["..."],
+      "summary": "short natural-language summary",
+      "conclusion": "Ready to Post" | "Revision Needed for Tech Competitiveness and Clarity",
+      "improved_jd": "Full improved JD as a single string, with headers like 'Role Title', 'About the Role', 'Key Responsibilities', 'Required Skills & Experience', 'Domain Knowledge', 'Work Model & Location', 'Work Culture & Ways of Working'. Missing critical details are represented with placeholders such as [Insert location], [Insert primary tech stack], etc."
+    }
+  }
+  ```
+
+Notes:
+- The backend enforces that the LLM returns **a single-line JSON object**, which is parsed and exposed as `message`.
+- `improved_jd` is **always populated** and structured with clear headers that map to the core checklist.
+- When information is missing, placeholders are used, and corresponding entries are added under `critical_gaps_technical` / `critical_gaps_administrative` with suggestions for what to fill in.
+
+---
+
+### 8.4 `POST /jd/upload`
+
+- **Auth**: Required.
+- **Content type**: `multipart/form-data`
+- **Fields**:
+  - `file`: JD file (`.txt`, `.pdf`, `.doc`, `.docx`)
+  - `uploaded_by`: optional string (e.g. username)
+
+- **Response** (`JobUploadResponse`):
+
+  ```json
+  {
+    "jd_id": 1,
+    "file_name": "sample_jd.txt",
+    "file_saved_location": "uploaded_jds/sample_jd.txt"
+  }
+  ```
+
+---
+
+### 8.5 `GET /jd/{jd_id}`
+
+- **Auth**: Required.
+- **Path parameter**: `jd_id` (int)
+- **Response** (`JobDetailsResponse`):
+
+  ```json
+  {
+    "jd_id": 1,
+    "file_name": "sample_jd.txt",
+    "uploaded_by": "user1",
+    "created_date": "2026-02-10T12:34:56.000000",
+    "download": "uploaded_jds/sample_jd.txt"
+  }
+  ```
+
+---
+
+### 8.6 `POST /resumes/upload`
+
+- **Auth**: Required.
+- **Content type**: `multipart/form-data`
+- **Fields**:
+  - `jd_id`: integer (required) – must reference an existing JD
+  - `file`: resume file (`.txt`, `.pdf`, `.doc`, `.docx`)
+  - `uploaded_by`: optional string
+
+- **Response** (`ResumeUploadResponse`):
+
+  ```json
+  {
+    "resume_id": 1,
+    "jd_id": 1,
+    "file_name": "candidate_resume.pdf",
+    "file_location": "uploaded_resumes/candidate_resume.pdf"
+  }
+  ```
+
+---
+
+### 8.7 `GET /resumes?jd_id={id}`
+
+- **Auth**: Required.
+- **Query parameter**: `jd_id` (int)
+- **Response** (`ResumeListResponse`):
+
+  ```json
+  {
+    "resumes": [
+      {
+        "resume_id": 1,
+        "jd_id": 1,
+        "file_name": "candidate_resume.pdf",
+        "file_location": "uploaded_resumes/candidate_resume.pdf",
+        "uploaded_by": "user1",
+        "created_date": "2026-02-10T12:40:00.000000"
+      }
+    ]
+  }
+  ```
+
+---
+
+## 9. API docs
+
+FastAPI provides automatic interactive documentation:
 
 - Swagger UI: `http://127.0.0.1:8000/docs`
 - ReDoc: `http://127.0.0.1:8000/redoc`
 
----
-
-## 9. Common troubleshooting
-
-**1. Command `python` points to the wrong version**
-
-- On macOS, you may need to use `python3` instead of `python` when creating the venv:
-
-  ```bash
-  python3 -m venv .venv
-  source .venv/bin/activate
-  ```
-
-- On Windows, ensure Python is added to PATH during installation.
-
-**2. `ModuleNotFoundError` for FastAPI or others**
-
-- Make sure the virtual environment is activated and `pip install -r requirements.txt` has been run successfully.
-
-**3. Database table not found errors**
-
-- Ensure `dev.db` exists and `sql/init.sql` has been executed (either manually via `sqlite3` or automatically by the app initialization logic).
-
-**4. File upload errors (415 / 422)**
-
-- Confirm the request is `multipart/form-data` and that you are sending the `file` field (and `jd_id` for resume uploads).
+Use these to explore schemas (including the JSON published by `/jd/builder`) and test endpoints.
 
 ---
 
@@ -265,203 +392,36 @@ You can also explore and test the API using FastAPIs automatic docs:
   - `api/routes.py` – All REST API endpoints.
   - `agents/` – LLM / LangGraph agent construction.
   - `core/` – Configuration and settings.
-  - `models/` – SQLAlchemy models and DB session configuration.
-  - `prompts/` – Prompt templates (e.g. JD review system prompt).
+  - `models/` – Pydantic API models & SQLAlchemy models / DB session configuration.
+  - `prompts/` – Prompt templates (e.g. JD review system prompt with JSON output).
 - `sql/init.sql` – Database schema initialization.
 - `dev.db` – SQLite database file (created after init).
 - `requirements.txt` – Python dependencies.
 
-This README should give you enough to set up and run the application on both macOS and Windows.
-
 ---
 
-## 11. API call examples (with test data and responses)
+## 11. Common troubleshooting
 
-Base URL (default): `http://127.0.0.1:8000`
+1. **`python` points to the wrong version**
+   - On macOS, you may need to use `python3` instead of `python` when creating the venv:
 
-> Note: Example responses are illustrative; actual values will vary.
+     ```bash
+     python3 -m venv .venv
+     source .venv/bin/activate
+     ```
 
-### 11.1 `POST /auth/login`
+   - On Windows, ensure Python is added to PATH during installation.
 
-**Request**
+2. **`ModuleNotFoundError` for FastAPI or others**
+   - Make sure the virtual environment is activated and `pip install -r requirements.txt` has been run successfully.
 
-```bash
-curl -X POST "http://127.0.0.1:8000/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "user_name": "saikodati",
-    "password": "root"
-  }'
-```
+3. **Database table not found errors**
+   - Ensure `dev.db` exists and `sql/init.sql` has been executed (either manually via `sqlite3` or automatically by the app initialization logic).
 
-**Sample response**
+4. **File upload errors (415 / 422)**
+   - Confirm the request is `multipart/form-data` and that you are sending the `file` field (and `jd_id` for resume uploads).
 
-```json
-{
-  "success": true,
-  "message": "Login successful",
-  "token": "demo-token"
-}
-```
+5. **`/jd/builder` returns 500 with `"Model returned invalid JSON"`**
+   - This means the LLM response was not valid JSON. Retry the request; if it persists, inspect logs and the raw LLM output. The system prompt is designed to strongly enforce a single-line JSON object.
 
----
-
-### 11.2 `POST /chat`
-
-**Request**
-
-```bash
-curl -X POST "http://127.0.0.1:8000/chat" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer demo-token" \
-  -d '{
-    "message": "Summarize the responsibilities of a data engineer."
-  }'
-```
-
-**Sample response**
-
-```json
-{
-  "response": "A data engineer designs, builds, and maintains data pipelines, ..."
-}
-```
-
----
-
-### 11.3 `POST /jd/builder`
-
-**Request**
-
-```bash
-curl -X POST "http://127.0.0.1:8000/jd/builder" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer demo-token" \
-  -d '{
-    "raw_jd_content": "We are looking for a senior backend engineer with experience in Python and FastAPI..."
-  }'
-```
-
-**Sample response**
-
-```json
-{
-  "updated_jd_content": "We are seeking a Senior Backend Engineer with strong experience in Python, FastAPI, and SQL...",
-  "score": "8.5",
-  "suggestions": "Clarify remote work policy; specify performance expectations and KPIs."
-}
-```
-
----
-
-### 11.4 `POST /jd/upload`
-
-**Request**
-
-```bash
-curl -X POST "http://127.0.0.1:8000/jd/upload" \
-  -H "accept: application/json" \
-  -H "Authorization: Bearer demo-token" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@sample_jd.txt" \
-  -F "uploaded_by=saikodati"
-```
-
-**Sample response**
-
-```json
-{
-  "jd_id": 1,
-  "file_name": "sample_jd.txt",
-  "file_saved_location": "uploaded_jds/sample_jd.txt"
-}
-```
-
----
-
-### 11.5 `GET /jd/{jd_id}`
-
-**Request**
-
-```bash
-curl -X GET "http://127.0.0.1:8000/jd/1" \
-  -H "accept: application/json" \
-  -H "Authorization: Bearer demo-token"
-```
-
-**Sample response**
-
-```json
-{
-  "jd_id": 1,
-  "file_name": "sample_jd.txt",
-  "uploaded_by": "saikodati",
-  "created_date": "2026-02-10T12:34:56.000000",
-  "download": "uploaded_jds/sample_jd.txt"
-}
-```
-
----
-
-### 11.6 `POST /resumes/upload`
-
-**Request**
-
-```bash
-curl -X POST "http://127.0.0.1:8000/resumes/upload?jd_id=1" \
-  -H "accept: application/json" \
-  -H "Authorization: Bearer demo-token" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@candidate_resume.pdf" \
-  -F "uploaded_by=saikodati"
-```
-
-**Sample response**
-
-```json
-{
-  "resume_id": 1,
-  "jd_id": 1,
-  "file_name": "candidate_resume.pdf",
-  "file_location": "uploaded_jds/candidate_resume.pdf"
-}
-```
-
----
-
-### 11.7 `GET /resumes?jd_id={id}`
-
-**Request**
-
-```bash
-curl -X GET "http://127.0.0.1:8000/resumes?jd_id=1" \
-  -H "accept: application/json" \
-  -H "Authorization: Bearer demo-token"
-```
-
-**Sample response**
-
-```json
-{
-  "resumes": [
-    {
-      "resume_id": 1,
-      "jd_id": 1,
-      "file_name": "candidate_resume.pdf",
-      "file_location": "uploaded_jds/candidate_resume.pdf",
-      "uploaded_by": "saikodati",
-      "created_date": "2026-02-10T12:40:00.000000"
-    },
-    {
-      "resume_id": 2,
-      "jd_id": 1,
-      "file_name": "candidate_resume_2.pdf",
-      "file_location": "uploaded_jds/candidate_resume_2.pdf",
-      "uploaded_by": "recruiter1",
-      "created_date": "2026-02-10T13:05:00.000000"
-    }
-  ]
-}
-```
-
-These examples can be used directly with `curl`, Postman, or any HTTP client to test the APIs end to end.
+This README reflects the current `/jd/builder` behavior (raw text in, structured JSON out) and the no-hallucination, placeholder-based JD improvement logic.
