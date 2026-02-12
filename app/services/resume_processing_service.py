@@ -10,6 +10,11 @@ from app.models.resume import Resume, ResumeAnalysis
 from app.agents.agent import build_resume_processing_agent
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.prompts.resume_analysis_prompt import RESUME_ANALYSIS_SYSTEM_PROMPT
+from app.services.file_readers import read_file_to_text
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 def _fetch_pending_batch(db_session: Session) -> List[Resume]:
@@ -19,6 +24,32 @@ def _fetch_pending_batch(db_session: Session) -> List[Resume]:
         .limit(settings.resume_process_batch_size)
         .all()
     )
+
+
+async def _mark_error(
+    db_session: Session,
+    jd: JobDescription,
+    resume: Resume,
+    reason: str,
+    processed_by: str | None,
+):
+    """Helper to record a processing error on a resume and bump JD counter."""
+
+    logger.error(
+        "Resume processing error for resume_id=%s jd_id=%s: %s",
+        resume.resume_id,
+        jd.jd_id,
+        reason,
+    )
+
+    resume.status = "error"
+    resume.failure_reason = reason[:500]  # avoid extremely long strings
+    db_session.add(resume)
+
+    jd.processed_resumes_count = (jd.processed_resumes_count or 0) + 1
+    db_session.add(jd)
+
+    db_session.commit()
 
 
 async def _process_single_resume(
@@ -31,15 +62,15 @@ async def _process_single_resume(
     """Stateless per-resume processing: send JD + this resume only."""
 
     try:
-        with open(jd.file_saved_location, "r", encoding="utf-8", errors="ignore") as f:
-            jd_text = f.read()
-    except Exception:
+        jd_text = read_file_to_text(jd.file_saved_location)
+    except Exception as exc:
+        await _mark_error(db_session, jd, resume, f"JD read error: {exc}", processed_by)
         return
 
     try:
-        with open(resume.file_location, "r", encoding="utf-8", errors="ignore") as f:
-            resume_text = f.read()
-    except Exception:
+        resume_text = read_file_to_text(resume.file_location)
+    except Exception as exc:
+        await _mark_error(db_session, jd, resume, f"Resume read error: {exc}", processed_by)
         return
 
     messages = [
@@ -47,9 +78,13 @@ async def _process_single_resume(
         HumanMessage(content=f"JOB DESCRIPTION:\n{jd_text}\n\nRESUME:\n{resume_text}"),
     ]
 
-    result = agent.invoke({"messages": messages})
-    last_message = result["messages"][-1]
-    raw = getattr(last_message, "content", str(last_message))
+    try:
+        result = agent.invoke({"messages": messages})
+        last_message = result["messages"][-1]
+        raw = getattr(last_message, "content", str(last_message))
+    except Exception as exc:
+        await _mark_error(db_session, jd, resume, f"LLM invoke error: {exc}", processed_by)
+        return
 
     try:
         parsed = json.loads(raw)
@@ -73,6 +108,7 @@ async def _process_single_resume(
     db_session.add(analysis)
 
     resume.status = "processed"
+    resume.failure_reason = None
     db_session.add(resume)
 
     jd.processed_resumes_count = (jd.processed_resumes_count or 0) + 1
@@ -93,13 +129,25 @@ async def run_once(processed_by: str | None = "system") -> int:
     try:
         pending = _fetch_pending_batch(db)
         if not pending:
+            logger.info("Resume worker: no pending resumes to process")
             return 0
+
+        logger.info(
+            "Resume worker: starting batch with %d pending resumes (requested by %s)",
+            len(pending),
+            processed_by,
+        )
 
         agent = build_resume_processing_agent()
 
         for resume in pending:
             jd = db.query(JobDescription).filter(JobDescription.jd_id == resume.jd_id).first()
             if not jd:
+                logger.error(
+                    "Resume worker: jd_id=%s not found for resume_id=%s",
+                    resume.jd_id,
+                    resume.resume_id,
+                )
                 continue
 
             await _process_single_resume(
@@ -110,6 +158,9 @@ async def run_once(processed_by: str | None = "system") -> int:
                 processed_by=processed_by,
             )
 
+        logger.info(
+            "Resume worker: finished batch, attempted %d resumes", len(pending)
+        )
         return len(pending)
     finally:
         db.close()

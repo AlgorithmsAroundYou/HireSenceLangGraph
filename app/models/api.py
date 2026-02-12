@@ -97,3 +97,57 @@ class ResumeListResponse(BaseModel):
 
 class ResumeProcessOnceResponse(BaseModel):
     processed_count: int
+
+
+class ResumeFeedbackRequest(BaseModel):
+    label: str  # e.g., good_fit, bad_fit, maybe
+    comment: Optional[str] = None
+
+
+class ResumeFeedbackResponse(BaseModel):
+    feedback_id: int
+    resume_id: int
+    jd_id: int
+    user_name: str
+    label: str
+    comment: Optional[str] = None
+    created_at: str
+
+
+class ResumeFeedbackListResponse(BaseModel):
+    items: List[ResumeFeedbackResponse]
+
+
+class ResumeAnalysisSummary(BaseModel):
+    resume_id: int
+    jd_id: int
+    file_name: Optional[str] = None
+    match_score: Optional[float] = None
+    status: Optional[str] = None
+    failure_reason: Optional[str] = None
+
+
+class ResumeAnalysisDetail(BaseModel):
+    resume_id: int
+    jd_id: int
+    file_name: Optional[str] = None
+    match_score: Optional[float] = None
+    analysis_json: dict
+    status: Optional[str] = None
+    failure_reason: Optional[str] = None
+
+
+class ResumeAnalysisListResponse(BaseModel):
+    items: List[ResumeAnalysisSummary]
+
+
+class ResumeStatusUpdateRequest(BaseModel):
+    business_status: str  # e.g., interview_scheduled, rejected, on_hold
+
+
+class ResumeStatusUpdateResponse(BaseModel):
+    resume_id: int
+    jd_id: int
+    business_status: Optional[str] = None
+    status: Optional[str] = None
+    failure_reason: Optional[str] = None

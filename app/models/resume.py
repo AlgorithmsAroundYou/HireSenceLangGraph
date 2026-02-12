@@ -23,7 +23,9 @@ class Resume(Base):
 
     # status & audit
     status = Column(String, nullable=False, default="new")
+    failure_reason = Column(String, nullable=True)
     uploaded_by = Column(String, nullable=True)
+    business_status = Column(String, nullable=True)  # interview_scheduled, rejected, etc.
     is_active = Column(Boolean, nullable=False, default=True, server_default="1")
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=True)

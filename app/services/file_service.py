@@ -3,18 +3,20 @@ from fastapi import HTTPException, status, UploadFile
 from app.core.config import settings
 
 
-ALLOWED_EXTENSIONS = {ext.strip().lower() for ext in settings.allowed_extensions.split(",")}
+ALLOWED_EXTENSIONS = {
+    ext.strip().lower() for ext in settings.allowed_extensions.split(",") if ext.strip()
+}
 
 
 def save_upload_file(upload_file: UploadFile, destination_dir: str) -> str:
     """Save an uploaded file to a destination directory and return the full path.
 
-    This helper is reusable for other services.
+    Uses the unified ALLOWED_EXTENSIONS setting for all uploads (JD and resumes).
     """
 
     os.makedirs(destination_dir, exist_ok=True)
 
-    # Basic extension validation
+    # Basic extension validation using unified config
     _, ext = os.path.splitext(upload_file.filename or "")
     ext = ext.lstrip(".").lower()
     if ext not in ALLOWED_EXTENSIONS:

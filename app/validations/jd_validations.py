@@ -10,14 +10,18 @@ def validate_jd_upload(file: UploadFile) -> None:
     """
 
     filename = file.filename or ""
-    ext = Path(filename).suffix.lower()
+    ext = Path(filename).suffix.lower().lstrip(".")
 
-    allowed_exts = {e.strip().lower() for e in settings.allowed_jd_extensions.split(",") if e.strip()}
+    allowed_exts = {
+        e.strip().lower()
+        for e in settings.allowed_extensions.split(",")
+        if e.strip()
+    }
 
     if ext not in allowed_exts:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(allowed_exts))}",
+            detail=f"Unsupported file type '.{ext}'. Allowed: {', '.join(sorted(allowed_exts))}",
         )
 
     max_size_bytes = settings.max_jd_file_size_bytes

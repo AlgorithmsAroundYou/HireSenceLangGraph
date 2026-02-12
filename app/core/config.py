@@ -29,14 +29,10 @@ class Settings(BaseSettings):
     upload_dir_jd: str = os.getenv("UPLOAD_DIR_JD", "uploaded_jds")
     upload_dir_resume: str = os.getenv("UPLOAD_DIR_RESUME", "uploaded_resumes")
 
-    # Generic allowed extensions (for legacy/general uploads)
+    # Single allowed extensions list for all uploads (JD and resumes)
     allowed_extensions: str = os.getenv("ALLOWED_EXTENSIONS", "txt,pdf,doc,docx")
 
-    # JD validation config from environment
-    # Example: ALLOWED_JD_EXTENSIONS="txt,pdf,doc,docx"
-    allowed_jd_extensions: str = os.getenv(
-        "ALLOWED_JD_EXTENSIONS", "txt,pdf,doc,docx"
-    )
+    # Max JD file size
     # Example: MAX_JD_FILE_SIZE_BYTES="10485760"  (10 MB)
     max_jd_file_size_bytes: int = int(
         os.getenv("MAX_JD_FILE_SIZE_BYTES", str(10 * 1024 * 1024))

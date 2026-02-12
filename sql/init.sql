@@ -28,11 +28,11 @@ INSERT OR IGNORE INTO user_details (
 )
 VALUES (
     1,
-    'admin',
-    'admin@example.com',
+    'saikodati',
+    'sai.kodati@agiliad.com',
     'System Administrator',
     'root',
-    'admin',
+    'sai kodati',
     1,
     0,
     CURRENT_TIMESTAMP
@@ -81,7 +81,9 @@ CREATE TABLE IF NOT EXISTS resume_details (
 
     -- status & audit
     status TEXT NOT NULL DEFAULT 'new',
+    failure_reason TEXT,
     uploaded_by TEXT,
+    business_status TEXT, -- e.g., interview_scheduled, rejected, on_hold
     is_active BOOLEAN NOT NULL DEFAULT 1,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME,
@@ -104,6 +106,18 @@ CREATE TABLE IF NOT EXISTS resume_analysis_details (
     processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     processed_by TEXT,
 
+    FOREIGN KEY (resume_id) REFERENCES resume_details (resume_id),
+    FOREIGN KEY (jd_id) REFERENCES job_description_details (jd_id)
+);
+
+CREATE TABLE IF NOT EXISTS resume_feedback (
+    feedback_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    resume_id INTEGER NOT NULL,
+    jd_id INTEGER NOT NULL,
+    user_name TEXT NOT NULL,
+    label TEXT NOT NULL,
+    comment TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (resume_id) REFERENCES resume_details (resume_id),
     FOREIGN KEY (jd_id) REFERENCES job_description_details (jd_id)
 );
