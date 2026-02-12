@@ -1,0 +1,13 @@
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.devcontainer
+.git
+.gitignore
+.env
+dev.db
+uploaded_jds
+uploaded_resumes
+hiresence_uploads

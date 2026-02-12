@@ -49,7 +49,10 @@ async def upload_resume(
     db=Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Upload one or more resume files linked to a JD and persist metadata."""
+    """Upload one or more resume files linked to a JD and persist metadata.
+
+    Resumes are stored under a per-JD folder: <UPLOAD_DIR_RESUME>/<jd_id>/.
+    """
 
     from app.models.job_description import JobDescription as JDModel
 
@@ -86,7 +89,9 @@ async def upload_resume(
         validate_jd_upload(file)
 
         try:
-            saved_path = save_upload_file(file, settings.upload_dir_resume)
+            # Store resumes under a JD-specific subfolder
+            destination_dir = f"{settings.upload_dir_resume}/{jd_id}"
+            saved_path = save_upload_file(file, destination_dir)
         except HTTPException:
             raise
         except Exception as exc:

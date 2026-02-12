@@ -193,7 +193,7 @@ Any request to protected routes without a valid token will receive `401 Not auth
 
 ## 8. Available endpoints (overview)
 
-Base URL: `http://127.0.0.1:8000`
+Base URL: `http://127.0.0.1:8000/api`
 
 ### 8.1 `POST /chat`
 
@@ -366,6 +366,31 @@ Notes:
         "file_location": "uploaded_resumes/candidate_resume.pdf",
         "uploaded_by": "user1",
         "created_date": "2026-02-10T12:40:00.000000"
+      }
+    ]
+  }
+  ```
+
+---
+
+### 8.8 `GET /jd/{jd_id}/analysis`
+
+List analysis results (match scores and processing status) for all resumes belonging to a given JD.
+
+- **Auth**: Required.
+- **Path parameter**: `jd_id` (int)
+- **Response** (`ResumeAnalysisListResponse`):
+
+  ```json
+  {
+    "items": [
+      {
+        "resume_id": 1,
+        "jd_id": 1,
+        "file_name": "candidate_resume.pdf",
+        "match_score": 0.87,
+        "status": "processed",
+        "failure_reason": null
       }
     ]
   }
