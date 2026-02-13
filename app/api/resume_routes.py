@@ -1,23 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from fastapi import status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import FileResponse
 from typing import List
+import json as _json
 import logging
 
+from app.core.config import settings
 from app.models.user import User
 from app.models.api import (
     ResumeUploadResponse,
     ResumeListResponse,
     ResumeProcessOnceResponse,
-    ResumeFeedbackRequest,
-    ResumeFeedbackResponse,
-    ResumeFeedbackListResponse,
-    ResumeAnalysisSummary,
-    ResumeAnalysisDetail,
     ResumeAnalysisListResponse,
+    ResumeAnalysisDetail,
+    ResumeAnalysisSummary,
     ResumeStatusUpdateRequest,
     ResumeStatusUpdateResponse,
 )
+from app.services.auth_service import get_db, get_current_user
+from app.services.file_service import save_upload_file
 from app.services.resume_service import (
     create_resume,
     list_resumes_by_jd as list_resumes_svc,
@@ -26,14 +26,6 @@ from app.services.resume_service import (
     delete_resume,
     update_resume_business_status,
 )
-from app.services.feedback_service import (
-    add_resume_feedback,
-    list_feedback_by_resume,
-    list_feedback_by_jd,
-)
-from app.services.auth_service import get_db, get_current_user
-from app.services.file_service import save_upload_file
-from app.core.config import settings
 from app.validations.jd_validations import validate_jd_upload
 from app.services.resume_processing_service import run_once as run_resume_process_once
 
@@ -163,128 +155,24 @@ async def download_resume(
 
 
 @router.post("/resumes/process-once", response_model=ResumeProcessOnceResponse)
-async def process_resumes_once(user: User = Depends(get_current_user)):
-    """Trigger a single batch of resume processing."""
+async def process_resumes_once(
+    jd_id: int | None = None,
+    user: User = Depends(get_current_user),
+):
+    """Trigger a single batch of resume processing.
 
-    processed = await run_resume_process_once(processed_by=user.user_name)
+    If jd_id is provided, only pending resumes for that JD are processed.
+    Otherwise, pending resumes across all JDs are considered.
+    """
+
+    processed = await run_resume_process_once(processed_by=user.user_name, jd_id=jd_id)
     logger.info(
-        "Manual resume processing triggered by user='%s': processed_count=%d",
+        "Manual resume processing triggered by user='%s' jd_id=%s: processed_count=%d",
         user.user_name,
+        jd_id,
         processed,
     )
     return ResumeProcessOnceResponse(processed_count=processed)
-
-
-@router.post("/resumes/{resume_id}/feedback", response_model=ResumeFeedbackResponse)
-async def give_resume_feedback(
-    resume_id: int,
-    jd_id: int,
-    payload: ResumeFeedbackRequest,
-    db=Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """Submit feedback on a resume for a specific JD (good_fit / bad_fit / maybe + optional comment)."""
-
-    # Ensure resume exists and belongs to the given jd_id
-    from app.models.resume import Resume as ResumeModel
-
-    resume = db.query(ResumeModel).filter(ResumeModel.resume_id == resume_id).first()
-    if not resume:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Resume not found",
-        )
-
-    if resume.jd_id != jd_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Provided jd_id does not match resume's jd_id",
-        )
-
-    fb = add_resume_feedback(
-        db,
-        resume_id=resume_id,
-        jd_id=jd_id,
-        user_name=user.user_name,
-        label=payload.label,
-        comment=payload.comment,
-    )
-
-    return ResumeFeedbackResponse(
-        feedback_id=fb.feedback_id,
-        resume_id=fb.resume_id,
-        jd_id=fb.jd_id,
-        user_name=fb.user_name,
-        label=fb.label,
-        comment=fb.comment,
-        created_at=fb.created_at.isoformat() if fb.created_at else None,
-    )
-
-
-@router.get("/resumes/{resume_id}/feedback", response_model=ResumeFeedbackListResponse)
-async def get_feedback_for_resume(
-    resume_id: int,
-    db=Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """Get all feedback entries for a given resume_id."""
-
-    from app.models.resume import Resume as ResumeModel
-
-    resume = db.query(ResumeModel).filter(ResumeModel.resume_id == resume_id).first()
-    if not resume:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Resume not found",
-        )
-
-    feedback_rows = list_feedback_by_resume(db, resume_id)
-    items = [
-        ResumeFeedbackResponse(
-            feedback_id=row.feedback_id,
-            resume_id=row.resume_id,
-            jd_id=row.jd_id,
-            user_name=row.user_name,
-            label=row.label,
-            comment=row.comment,
-            created_at=row.created_at.isoformat() if row.created_at else None,
-        )
-        for row in feedback_rows
-    ]
-    return ResumeFeedbackListResponse(items=items)
-
-
-@router.get("/jd/{jd_id}/feedback", response_model=ResumeFeedbackListResponse)
-async def get_feedback_for_jd(
-    jd_id: int,
-    db=Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """Get all feedback entries across resumes for a given jd_id."""
-
-    from app.models.job_description import JobDescription as JDModel
-
-    jd = db.query(JDModel).filter(JDModel.jd_id == jd_id).first()
-    if not jd:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job description not found",
-        )
-
-    feedback_rows = list_feedback_by_jd(db, jd_id)
-    items = [
-        ResumeFeedbackResponse(
-            feedback_id=row.feedback_id,
-            resume_id=row.resume_id,
-            jd_id=row.jd_id,
-            user_name=row.user_name,
-            label=row.label,
-            comment=row.comment,
-            created_at=row.created_at.isoformat() if row.created_at else None,
-        )
-        for row in feedback_rows
-    ]
-    return ResumeFeedbackListResponse(items=items)
 
 
 @router.get("/jd/{jd_id}/analysis", response_model=ResumeAnalysisListResponse)
@@ -327,7 +215,7 @@ async def get_resume_analysis(
     db=Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Return detailed analysis (including raw JSON) for a single resume."""
+    """Return detailed analysis (including raw JSON and all extracted DB fields) for a single resume."""
 
     row = get_resume_analysis_detail(db, resume_id)
     if not row:
@@ -344,25 +232,136 @@ async def get_resume_analysis(
             resume_id=resume.resume_id,
             jd_id=resume.jd_id,
             file_name=resume.file_name,
+            candidate_name=resume.candidate_name,
+            candidate_email=resume.candidate_email,
+            candidate_phone=resume.candidate_phone,
             match_score=resume.match_score,
+            summary=None,
+            issues=None,
+            dimensions=None,
             analysis_json={},
+            issues_raw=None,
+            tech_stack_match_score=None,
+            tech_stack_match_note=None,
+            relevant_experience_score=None,
+            relevant_experience_note=None,
+            responsibilities_impact_score=None,
+            responsibilities_impact_note=None,
+            seniority_fit_score=None,
+            seniority_fit_note=None,
+            domain_fit_score=None,
+            domain_fit_note=None,
+            red_flags_gaps_score=None,
+            red_flags_gaps_note=None,
+            communication_clarity_score=None,
+            communication_clarity_note=None,
+            soft_skills_professionalism_score=None,
+            soft_skills_professionalism_note=None,
+            project_complexity_score=None,
+            project_complexity_note=None,
+            consistency_trajectory_score=None,
+            consistency_trajectory_note=None,
+            processed_at=None,
+            processed_by=None,
             status=resume.status,
             failure_reason=resume.failure_reason,
         )
-
-    import json as _json
 
     try:
         analysis_obj = _json.loads(analysis.analysis_json)
     except Exception:
         analysis_obj = {"_raw": analysis.analysis_json}
 
+    # Extract top-level fields if present
+    summary = getattr(analysis, "summary", None)
+    issues_text = getattr(analysis, "issues", None)
+    issues_list = None
+    if issues_text:
+        try:
+            tmp = _json.loads(issues_text)
+            if isinstance(tmp, list):
+                issues_list = [str(x) for x in tmp]
+            else:
+                issues_list = [str(tmp)]
+        except Exception:
+            # Fallback: treat as comma-separated or single string
+            if "," in issues_text:
+                issues_list = [p.strip() for p in issues_text.split(",") if p.strip()]
+            else:
+                issues_list = [issues_text]
+
+    # Build dimensions dict from stored per-dimension columns
+    from app.models.api import ResumeAnalysisDimension
+
+    def dim(score, note):
+        if score is None and not note:
+            return None
+        return ResumeAnalysisDimension(score=score, note=note)
+
+    dimensions = {
+        "tech_stack_match": dim(analysis.tech_stack_match_score, analysis.tech_stack_match_note),
+        "relevant_experience": dim(analysis.relevant_experience_score, analysis.relevant_experience_note),
+        "responsibilities_impact": dim(
+            analysis.responsibilities_impact_score, analysis.responsibilities_impact_note
+        ),
+        "seniority_fit": dim(analysis.seniority_fit_score, analysis.seniority_fit_note),
+        "domain_fit": dim(analysis.domain_fit_score, analysis.domain_fit_note),
+        "red_flags_gaps": dim(analysis.red_flags_gaps_score, analysis.red_flags_gaps_note),
+        "communication_clarity": dim(
+            analysis.communication_clarity_score, analysis.communication_clarity_note
+        ),
+        "soft_skills_professionalism": dim(
+            analysis.soft_skills_professionalism_score,
+            analysis.soft_skills_professionalism_note,
+        ),
+        "project_complexity": dim(
+            analysis.project_complexity_score, analysis.project_complexity_note
+        ),
+        "consistency_trajectory": dim(
+            analysis.consistency_trajectory_score, analysis.consistency_trajectory_note
+        ),
+    }
+
+    # Remove dimensions that are completely None
+    dimensions = {k: v for k, v in dimensions.items() if v is not None}
+
+    processed_at_str = analysis.processed_at.isoformat() if getattr(analysis, "processed_at", None) else None
+
     return ResumeAnalysisDetail(
         resume_id=resume.resume_id,
         jd_id=resume.jd_id,
         file_name=resume.file_name,
+        candidate_name=resume.candidate_name,
+        candidate_email=resume.candidate_email,
+        candidate_phone=resume.candidate_phone,
         match_score=analysis.match_score,
+        summary=summary,
+        issues=issues_list,
+        dimensions=dimensions or None,
         analysis_json=analysis_obj,
+        issues_raw=issues_text,
+        tech_stack_match_score=analysis.tech_stack_match_score,
+        tech_stack_match_note=analysis.tech_stack_match_note,
+        relevant_experience_score=analysis.relevant_experience_score,
+        relevant_experience_note=analysis.relevant_experience_note,
+        responsibilities_impact_score=analysis.responsibilities_impact_score,
+        responsibilities_impact_note=analysis.responsibilities_impact_note,
+        seniority_fit_score=analysis.seniority_fit_score,
+        seniority_fit_note=analysis.seniority_fit_note,
+        domain_fit_score=analysis.domain_fit_score,
+        domain_fit_note=analysis.domain_fit_note,
+        red_flags_gaps_score=analysis.red_flags_gaps_score,
+        red_flags_gaps_note=analysis.red_flags_gaps_note,
+        communication_clarity_score=analysis.communication_clarity_score,
+        communication_clarity_note=analysis.communication_clarity_note,
+        soft_skills_professionalism_score=analysis.soft_skills_professionalism_score,
+        soft_skills_professionalism_note=analysis.soft_skills_professionalism_note,
+        project_complexity_score=analysis.project_complexity_score,
+        project_complexity_note=analysis.project_complexity_note,
+        consistency_trajectory_score=analysis.consistency_trajectory_score,
+        consistency_trajectory_note=analysis.consistency_trajectory_note,
+        processed_at=processed_at_str,
+        processed_by=getattr(analysis, "processed_by", None),
         status=resume.status,
         failure_reason=resume.failure_reason,
     )

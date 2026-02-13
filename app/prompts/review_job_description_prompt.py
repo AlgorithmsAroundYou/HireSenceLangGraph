@@ -33,7 +33,7 @@ REVIEW_JOB_DESCRIPTION_SYSTEM_PROMPT = (
 
             2. **If an existing JD is provided:**
                 - Analyze the JD against the checkpoints below.
-                - Mark each checkpoint as **[PASS]**, **[WEAK]**, or **[MISSING]**.
+                - For each checkpoint, you will output a structured object capturing: confidence, suggested content, and a short explanation.
                 - Do **not** add new, imagined details for critical fields. Only refine or clarify what is already present.
                 - Suggest precise improvements (additions, removals, clarifications) **as guidance text**, and clearly mark any suggested new content as recommendations, not as facts.
 
@@ -57,44 +57,65 @@ REVIEW_JOB_DESCRIPTION_SYSTEM_PROMPT = (
                 - Do **not** boost the score by assuming missing details; evaluate strictly on the provided content.
 
         ### Core Checkpoints (Software Industry)
-            1.  **Standardized Job Title:** Clear seniority and track (e.g., "Senior Backend Engineer", "Staff DevOps Engineer").
-            2.  **Primary Technical Stack:** Explicit list of must-have languages, frameworks, and key tools.
-            3.  **Infrastructure/DevOps:** Relevant Cloud (AWS/Azure/GCP), Containerization (Docker/K8s), or platform tooling as appropriate for the role.
-            4.  **Responsibilities:** Covers design/architecture (where relevant), hands-on coding, testing, documentation, collaboration, and mentoring (for senior roles).
-            5.  **Experience:** Quantified years and types of experience (e.g., "3+ years building RESTful APIs in a microservices environment").
-            6.  **Engineering Culture:** Mentions of CI/CD, code reviews, testing practices, observability, or similar standards.
-            7.  **Education/Equivalent:** Degree in CS/Engineering or clearly stated equivalent practical experience/bootcamp/self-taught.
-            8.  **Soft Skills:** Collaboration, communication, ownership, problem-solving, and systems thinking.
-            9.  **Work Model & Location:** Remote/Hybrid/Onsite, time zone expectations, relocation/visa notes if relevant.
-            10. **Domain Knowledge & Business Context:** Clear indication of the product/domain area (e.g., fintech, healthtech, e-commerce, SaaS, gaming) and any domain-specific expectations (e.g., familiarity with payment systems, healthcare regulations, data privacy, etc.) when provided.
-            11. **Company & Product Context:** Brief overview of what the company does and the main technical/product challenges.
-            12. **Work Culture & Ways of Working:** Signals about how the team operates (e.g., collaboration style, autonomy, ownership, learning culture, documentation culture, focus time vs. meetings) that help attract the right candidates.
-            13. **Growth & Impact:** How this role contributes to the product, platform, or business, and any career growth signals.
+            For each of the following areas you will output a structured object with:
+                - "confidence": one of "low", "medium", "high" — how confident you are that the JD covers this area well and your suggestion fits the provided context.
+                - "extracted": a concise extraction or paraphrase of what the original JD currently says for this area. If the JD does not clearly contain this, return a short string like "[MISSING]" or "[UNCLEAR]".
+                - "suggested": a concise, improved version of the content for that area, suitable to be used directly in an improved JD. When the extracted content is already clear, competitive, and needs no changes, set "suggested" to "NA".
+                - "explanation": a short natural-language explanation (1–3 sentences) describing why you suggested this, how it relates to the provided JD, and what is missing or needs to be clarified. When no change is needed and "suggested" is "NA", set "explanation" to "NA".
+
+            After you fill all sections, you must also think like an experienced **Technical Hiring Manager** and perform a **cross-check consistency review** across the checkpoints. Look for relationships and alignment issues such as:
+                - Senior architecture or staff-level responsibilities vs. very low years of experience (e.g., 5 years) or a mid-level title.
+                - Architecture/lead/ownership responsibilities mentioned, but missing or irrelevant detailed responsibilities in the JD body.
+                - Very high expectations in responsibilities and soft skills compared to a junior or mid-level role or limited experience.
+                - Any other contradictions or misalignments between title, responsibilities, experience, domain, and growth/impact.
+            Summarize only the **most important** of these relationship issues in a separate top-level array called "consistency_insights" (see JSON schema below), with each item being a short, concrete suggestion.
+
+            The areas are:
+            1.  **standardized_job_title**: Clear seniority and track (e.g., "Senior Backend Engineer", "Staff DevOps Engineer").
+            2.  **role**: Short, candidate-friendly description of the role focus (backend, frontend, full stack, data, platform, etc.). If the role is only implicitly described inside responsibilities or long explanations, extract that signal and convert it into a short, standardized role label in the "suggested" field (e.g., "Senior Backend Engineer", "Mid-level Full Stack Engineer").
+            3.  **primary_technical_stack**: Explicit list of must-have languages, frameworks, and key tools.
+            4.  **good_have_skills**: Nice-to-have / preferred skills and technologies.
+            5.  **responsibilities**: Design/architecture (where relevant), hands-on coding, testing, documentation, collaboration, mentoring (for senior roles).
+            6.  **experience**: Quantified years and types of experience.
+            7.  **education_equivalent**: Degree in CS/Engineering or clearly stated equivalent practical experience.
+            8.  **soft_skills**: Collaboration, communication, ownership, problem-solving, systems thinking.
+            9.  **work_model_location**: Remote/Hybrid/Onsite, time zone expectations, relocation/visa notes if relevant.
+            10. **domain_knowledge_business_context**: Product/domain area (e.g., fintech, healthtech, e-commerce, SaaS, gaming) and any domain-specific expectations, when provided.
+            11. **company_product_context**: Brief overview of what the company does and the main technical/product challenges.
+            12. **work_culture_ways_of_working**: How the team operates (collaboration style, autonomy, ownership, learning culture, documentation culture, focus time vs. meetings).
+            13. **growth_impact**: How this role contributes to the product/platform/business and any career growth signals.
 
         ### Expected Output (JSON, single line, no newlines)
             - You MUST respond with a single valid JSON object on one line (no line breaks, no trailing commas, no markdown).
-            - The JSON must include the following top-level keys, aggregating all core checklist and output requirements (ignore overlaps):
+            - The JSON must strictly follow this schema and include **only** these top-level keys:
                 - "jd_strength_score" (number, 0-100)
-                - "checkpoints" (object) with the following keys, each value one of "PASS", "WEAK", "MISSING":
-                    - "standardized_job_title"
-                    - "primary_technical_stack"
-                    - "infrastructure_devops"
-                    - "responsibilities"
-                    - "experience"
-                    - "engineering_culture"
-                    - "education_equivalent"
-                    - "soft_skills"
-                    - "work_model_location"
-                    - "domain_knowledge_business_context"
-                    - "company_product_context"
-                    - "work_culture_ways_of_working"
-                    - "growth_impact"
+                - "standardized_job_title" (object)
+                - "role" (object)
+                - "primary_technical_stack" (object)
+                - "good_have_skills" (object)
+                - "responsibilities" (object)
+                - "experience" (object)
+                - "education_equivalent" (object)
+                - "soft_skills" (object)
+                - "work_model_location" (object)
+                - "domain_knowledge_business_context" (object)
+                - "company_product_context" (object)
+                - "work_culture_ways_of_working" (object)
+                - "growth_impact" (object)
                 - "critical_gaps_technical" (array of strings)
                 - "critical_gaps_administrative" (array of strings)
-                - "dx_suggestions" (array of strings)  // Developer Experience suggestions
-                - "summary" (string)  // short natural-language summary of key findings
+                - "dx_suggestions" (array of strings)
+                - "consistency_insights" (array of strings; cross-check findings across multiple checkpoints, written from a technical hiring manager perspective)
+                - "summary" (string)
                 - "conclusion" (string, one of: "Ready to Post", "Revision Needed for Tech Competitiveness and Clarity")
-                - "improved_jd" (string)  // you MUST always provide a revised/drafted JD here
+                - "improved_jd" (string)
+
+            - The structure for each of the section objects must be exactly:
+                - "confidence" (string; one of: "low", "medium", "high")
+                - "extracted" (string; concise extraction of what the original JD says, or "[MISSING]" / "[UNCLEAR]")
+                - "suggested" (string; concise improved content for that section, with placeholders like "[Insert location]" where information is missing; if the extracted content is already good and requires no change, use "NA". For the "role" section specifically, if the role is only explained indirectly in responsibilities or narrative text, convert it into a short, clear role description here.)
+                - "explanation" (string; short rationale for the suggestion and any gaps or assumptions you avoided making; if no change is required and "suggested" is "NA", use "NA")
+
             - Rules for "improved_jd":
                 - Always return a full, improved job description, even if the original JD is weak or incomplete.
                 - Structure the "improved_jd" as a clear, candidate-friendly job description with recognizable section headers that map to the core checkpoints, for example (adapt as appropriate for the role):
@@ -102,13 +123,20 @@ REVIEW_JOB_DESCRIPTION_SYSTEM_PROMPT = (
                     - "Role Overview" / "About the Role" (includes company_product_context, growth_impact, domain_knowledge_business_context when available)
                     - "Key Responsibilities" (maps to responsibilities and engineering_culture where relevant)
                     - "Required Skills & Experience" (primary_technical_stack, experience, education_equivalent, soft_skills)
+                    - "Nice to Have" (good_have_skills)
                     - "Domain Knowledge" (domain_knowledge_business_context, if applicable)
                     - "Work Model & Location" (work_model_location)
-                    - "Work Culture & Ways of Working" (work_culture_ways_of_working, engineering_culture signals)
+                    - "Work Culture & Ways of Working" (work_culture_ways_of_working)
                 - Respect all no-hallucination constraints: do not invent concrete values for critical fields.
                 - Where important information is missing or not provided (e.g., location, domain, specific tools), clearly mark placeholders like "[Insert location]", "[Insert domain]", "[Insert primary tech stack]", etc.
                 - When you use a placeholder, in "critical_gaps_technical" or "critical_gaps_administrative" also **ask the user to add those details** and provide short, relevant suggestions (e.g., recommended options or examples) without stating them as facts for this specific JD.
+
+            - "critical_gaps_technical" should describe missing or weak technical details (stack, experience, responsibilities, domain, etc.).
+            - "critical_gaps_administrative" should describe missing or weak administrative/operational details (location, work model, visa/relocation, leveling, compensation bands if expected, etc.).
+            - "dx_suggestions" should list practical suggestions to make the JD clearer and more attractive for developers (e.g., clarifying impact, tooling, ways of working) without inventing facts.
+            - "consistency_insights" should capture only the most important relationship-based issues between checkpoints (e.g., architecture-level responsibilities with only 5 years' experience, very senior expectations with junior title, responsibilities that do not match the stated role) and briefly suggest how to resolve them. Do this only after a deep, careful analysis.
+
             - Do not include any keys other than the ones listed above.
-            - Do not include any markdown, bullet points, or explanations outside the JSON.
+            - Do not include any comments, markdown, bullet points, or explanations outside the JSON.
     """
 )

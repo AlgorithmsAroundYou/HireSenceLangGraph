@@ -68,6 +68,9 @@ def list_resumes_by_jd(db: Session, jd_id: int) -> ResumeListResponse:
                 status=r.status,
                 is_active=r.is_active,
                 created_at=created_str,
+                candidate_name=r.candidate_name,
+                candidate_email=r.candidate_email,
+                candidate_phone=r.candidate_phone,
             )
         )
 
@@ -105,6 +108,52 @@ def get_resume_analysis_detail(
         )
         .filter(Resume.resume_id == resume_id)
         .first()
+    )
+
+
+def add_resume_feedback(
+    db: Session,
+    *,
+    resume_id: int,
+    jd_id: int,
+    user_name: str,
+    label: str,
+    comment: str | None = None,
+) -> ResumeFeedback:
+    """Create a new feedback entry for a resume."""
+
+    feedback = ResumeFeedback(
+        resume_id=resume_id,
+        jd_id=jd_id,
+        user_name=user_name,
+        label=label,
+        comment=comment,
+    )
+    db.add(feedback)
+    db.commit()
+    db.refresh(feedback)
+    return feedback
+
+
+def list_feedback_by_resume(db: Session, resume_id: int) -> List[ResumeFeedback]:
+    """Return all feedback rows for a given resume_id."""
+
+    return (
+        db.query(ResumeFeedback)
+        .filter(ResumeFeedback.resume_id == resume_id)
+        .order_by(ResumeFeedback.created_at.asc())
+        .all()
+    )
+
+
+def list_feedback_by_jd(db: Session, jd_id: int) -> List[ResumeFeedback]:
+    """Return all feedback rows across resumes for a given jd_id."""
+
+    return (
+        db.query(ResumeFeedback)
+        .filter(ResumeFeedback.jd_id == jd_id)
+        .order_by(ResumeFeedback.created_at.asc())
+        .all()
     )
 
 

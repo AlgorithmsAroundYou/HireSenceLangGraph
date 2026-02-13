@@ -5,7 +5,7 @@ import logging
 
 from app.services.resume_processing_service import run_once
 from app.core.config import settings
-from app.api import auth_routes, chat_routes, jd_routes, resume_routes
+from app.api import auth_routes, chat_routes, jd_routes, resume_routes, feedback_routes
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -63,6 +63,7 @@ app.include_router(auth_routes.router, prefix="/api")
 app.include_router(chat_routes.router, prefix="/api")
 app.include_router(jd_routes.router, prefix="/api")
 app.include_router(resume_routes.router, prefix="/api")
+app.include_router(feedback_routes.router, prefix="/api")
 
 
 @app.get("/health")

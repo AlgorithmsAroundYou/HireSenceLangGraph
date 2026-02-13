@@ -101,6 +101,39 @@ CREATE TABLE IF NOT EXISTS resume_analysis_details (
 
     -- Optional extracted fields for quick querying
     match_score REAL,
+    summary TEXT,                -- top-level natural-language summary from JSON
+    issues TEXT,                 -- serialized list of issues (e.g., comma-separated or JSON string)
+
+    -- Per-dimension scores (0-10) and notes, extracted from analysis_json
+    tech_stack_match_score REAL,
+    tech_stack_match_note TEXT,
+
+    relevant_experience_score REAL,
+    relevant_experience_note TEXT,
+
+    responsibilities_impact_score REAL,
+    responsibilities_impact_note TEXT,
+
+    seniority_fit_score REAL,
+    seniority_fit_note TEXT,
+
+    domain_fit_score REAL,
+    domain_fit_note TEXT,
+
+    red_flags_gaps_score REAL,
+    red_flags_gaps_note TEXT,
+
+    communication_clarity_score REAL,
+    communication_clarity_note TEXT,
+
+    soft_skills_professionalism_score REAL,
+    soft_skills_professionalism_note TEXT,
+
+    project_complexity_score REAL,
+    project_complexity_note TEXT,
+
+    consistency_trajectory_score REAL,
+    consistency_trajectory_note TEXT,
 
     -- audit fields
     processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

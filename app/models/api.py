@@ -89,6 +89,9 @@ class ResumeSummary(BaseModel):
     status: Optional[str] = None
     is_active: Optional[bool] = None
     created_at: Optional[str] = None
+    candidate_name: Optional[str] = None
+    candidate_email: Optional[str] = None
+    candidate_phone: Optional[str] = None
 
 
 class ResumeListResponse(BaseModel):
@@ -127,12 +130,53 @@ class ResumeAnalysisSummary(BaseModel):
     failure_reason: Optional[str] = None
 
 
+class ResumeAnalysisDimension(BaseModel):
+    score: Optional[float] = None
+    note: Optional[str] = None
+
+
 class ResumeAnalysisDetail(BaseModel):
     resume_id: int
     jd_id: int
     file_name: Optional[str] = None
+    # candidate contact extracted into resume_details
+    candidate_name: Optional[str] = None
+    candidate_email: Optional[str] = None
+    candidate_phone: Optional[str] = None
+    # top-level analysis fields
     match_score: Optional[float] = None
+    summary: Optional[str] = None
+    # issues as parsed list for convenience
+    issues: Optional[List[str]] = None
+    # per-dimension structured view
+    dimensions: Optional[Dict[str, ResumeAnalysisDimension]] = None
+    # raw stored JSON from resume_analysis_details.analysis_json
     analysis_json: dict
+    # expose raw DB fields for issues and audit as well
+    issues_raw: Optional[str] = None
+    tech_stack_match_score: Optional[float] = None
+    tech_stack_match_note: Optional[str] = None
+    relevant_experience_score: Optional[float] = None
+    relevant_experience_note: Optional[str] = None
+    responsibilities_impact_score: Optional[float] = None
+    responsibilities_impact_note: Optional[str] = None
+    seniority_fit_score: Optional[float] = None
+    seniority_fit_note: Optional[str] = None
+    domain_fit_score: Optional[float] = None
+    domain_fit_note: Optional[str] = None
+    red_flags_gaps_score: Optional[float] = None
+    red_flags_gaps_note: Optional[str] = None
+    communication_clarity_score: Optional[float] = None
+    communication_clarity_note: Optional[str] = None
+    soft_skills_professionalism_score: Optional[float] = None
+    soft_skills_professionalism_note: Optional[str] = None
+    project_complexity_score: Optional[float] = None
+    project_complexity_note: Optional[str] = None
+    consistency_trajectory_score: Optional[float] = None
+    consistency_trajectory_note: Optional[str] = None
+    processed_at: Optional[str] = None
+    processed_by: Optional[str] = None
+    # resume status fields
     status: Optional[str] = None
     failure_reason: Optional[str] = None
 
