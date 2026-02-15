@@ -12,3 +12,4 @@ python-multipart
 markdown
 PyJWT
 PyPDF2
+python-docx

@@ -22,6 +22,63 @@ class LoginResponse(BaseModel):
     token: Optional[str] = None
 
 
+class SignupRequest(BaseModel):
+    user_name: str
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    password: str
+
+
+class SignupResponse(BaseModel):
+    success: bool
+    message: str
+    token: Optional[str] = None
+
+
+class ProfileCreateRequest(BaseModel):
+    user_name: str
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    password: str
+
+
+class ProfileUpdateRequest(BaseModel):
+    user_name: Optional[str] = None
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class ProfileResponse(BaseModel):
+    id: int
+    user_name: str
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
+    is_active: bool
+    is_email_verified: bool
+    last_login_at: Optional[str] = None
+    last_login_ip: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class ProfileListResponse(BaseModel):
+    users: List[ProfileResponse]
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class ChangePasswordResponse(BaseModel):
+    success: bool
+    message: str
+
+
 class JobReviewRequest(BaseModel):
     raw_jd_content: str
 
@@ -66,6 +123,36 @@ class JobAnalyzeResponse(BaseModel):
     parsed_summary: Optional[str] = None
     last_reviewed_at: Optional[str] = None
     last_reviewed_by: Optional[str] = None
+
+
+class JobDeleteResponse(BaseModel):
+    jd_id: int
+    file_deleted: bool
+    message: str
+
+
+class JDListItem(BaseModel):
+    jd_id: int
+    title: Optional[str] = None
+    file_name: str
+
+
+class JDListResponse(BaseModel):
+    jds: List[JDListItem]
+
+
+class DashboardActivityItem(BaseModel):
+    activity_type: str
+    message: str
+    timestamp: str
+
+
+class DashboardSummaryResponse(BaseModel):
+    jds_count: int
+    unprocessed_resumes_count: int
+    processed_resumes_count: int
+    pending_resumes_count: int
+    recent_activity: List[DashboardActivityItem] = []
 
 
 class ResumeUploadResponse(BaseModel):
@@ -195,3 +282,22 @@ class ResumeStatusUpdateResponse(BaseModel):
     business_status: Optional[str] = None
     status: Optional[str] = None
     failure_reason: Optional[str] = None
+
+
+class ResumeDeleteResponse(BaseModel):
+    resume_id: int
+    file_deleted: bool
+    message: str
+
+
+class ResumeMoveRequest(BaseModel):
+    jd_id: int
+
+
+class ResumeMoveResponse(BaseModel):
+    resume_id: int
+    previous_jd_id: int
+    jd_id: int
+    file_location: str
+    status: Optional[str] = None
+    message: str

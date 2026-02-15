@@ -51,7 +51,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db=Depends(get_d
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
         )
-        user_name: str = payload.get("sub")
+        user_name: str | None = payload.get("sub")
+        if not user_name:
+            user_obj = payload.get("user") or {}
+            user_name = user_obj.get("user_name")
         if user_name is None:
             raise credentials_exception
     except jwt.PyJWTError:

@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS user_details (
     email TEXT UNIQUE,
     full_name TEXT,
     password_hash TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'user',
+    role TEXT NOT NULL DEFAULT 'employee',
     is_active INTEGER NOT NULL DEFAULT 1,
     is_email_verified INTEGER NOT NULL DEFAULT 0,
     last_login_at DATETIME,
@@ -32,7 +32,7 @@ VALUES (
     'sai.kodati@agiliad.com',
     'System Administrator',
     'root',
-    'sai kodati',
+    'employee',
     1,
     0,
     CURRENT_TIMESTAMP

@@ -11,7 +11,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=True)
     full_name = Column(String, nullable=True)
     password_hash = Column(String, nullable=False)
-    role = Column(String, nullable=False, default="user")
+    role = Column(String, nullable=False, default="employee")
     is_active = Column(Boolean, default=True, nullable=False)
     is_email_verified = Column(Boolean, default=False, nullable=False)
     last_login_at = Column(DateTime, nullable=True)

@@ -15,6 +15,9 @@ from app.models.api import (
     ResumeAnalysisSummary,
     ResumeStatusUpdateRequest,
     ResumeStatusUpdateResponse,
+    ResumeDeleteResponse,
+    ResumeMoveRequest,
+    ResumeMoveResponse,
 )
 from app.services.auth_service import get_db, get_current_user
 from app.services.file_service import save_upload_file
@@ -25,6 +28,7 @@ from app.services.resume_service import (
     get_resume_analysis_detail,
     delete_resume,
     update_resume_business_status,
+    move_resume_to_jd,
 )
 from app.validations.jd_validations import validate_jd_upload
 from app.services.resume_processing_service import run_once as run_resume_process_once
@@ -118,9 +122,11 @@ async def upload_resume(
 
 @router.get("/resumes", response_model=ResumeListResponse)
 async def list_resumes_by_jd(
-    jd_id: int, db=Depends(get_db), user: User = Depends(get_current_user)
+    jd_id: int | None = None,
+    db=Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    """Return list of resumes for a given jd_id with file locations."""
+    """Return resumes; filter by jd_id when provided."""
     return list_resumes_svc(db, jd_id)
 
 
@@ -210,6 +216,7 @@ async def list_resume_analysis_for_jd(
 
 
 @router.get("/resumes/{resume_id}/analysis", response_model=ResumeAnalysisDetail)
+@router.get("/resume/{resume_id}/analysis", response_model=ResumeAnalysisDetail)
 async def get_resume_analysis(
     resume_id: int,
     db=Depends(get_db),
@@ -367,7 +374,7 @@ async def get_resume_analysis(
     )
 
 
-@router.delete("/resumes/{resume_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/resumes/{resume_id}", response_model=ResumeDeleteResponse)
 async def remove_resume(
     resume_id: int,
     db=Depends(get_db),
@@ -381,10 +388,10 @@ async def remove_resume(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Resume not found",
         )
-    return None
+    return deleted
 
 
-@router.patch("/resumes/{resume_id}/status", response_model=ResumeStatusUpdateResponse)
+@router.post("/resume/{resume_id}/status", response_model=ResumeStatusUpdateResponse)
 async def update_resume_status(
     resume_id: int,
     payload: ResumeStatusUpdateRequest,
@@ -410,4 +417,20 @@ async def update_resume_status(
         business_status=resume.business_status,
         status=resume.status,
         failure_reason=resume.failure_reason,
+    )
+
+
+@router.put("/resume/{resume_id}/jd", response_model=ResumeMoveResponse)
+async def update_resume_jd(
+    resume_id: int,
+    payload: ResumeMoveRequest,
+    db=Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Move a resume to a different JD when uploaded to wrong JD by mistake."""
+
+    return move_resume_to_jd(
+        db,
+        resume_id=resume_id,
+        target_jd_id=payload.jd_id,
     )

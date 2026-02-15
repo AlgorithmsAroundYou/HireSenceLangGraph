@@ -1,9 +1,17 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from datetime import datetime
 import json
+import os
+import logging
+from fastapi import HTTPException, status
 
 from app.models.job_description import JobDescription
-from app.models.api import JobUploadResponse, JobDetailsResponse
+from app.models.resume import Resume, ResumeAnalysis
+from app.models.api import JobUploadResponse, JobDetailsResponse, JobDeleteResponse
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_job_description(
@@ -85,3 +93,167 @@ def get_job_description_details(db: Session, jd_id: int) -> JobDetailsResponse |
         processed_resumes_count=jd.processed_resumes_count,
         download=jd.file_saved_location,
     )
+
+
+def list_job_descriptions(db: Session) -> list[dict]:
+    """Return JD list entries from job_description_details table."""
+
+    rows = (
+        db.query(JobDescription)
+        .filter(JobDescription.is_active.is_(True))
+        .order_by(JobDescription.jd_id.desc())
+        .all()
+    )
+
+    return [
+        {
+            "jd_id": row.jd_id,
+            "title": row.title,
+            "file_name": row.file_name,
+        }
+        for row in rows
+    ]
+
+
+def delete_job_description(db: Session, jd_id: int) -> JobDeleteResponse:
+    jd = db.query(JobDescription).filter(JobDescription.jd_id == jd_id).first()
+    if not jd:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job description not found",
+        )
+
+    resume_exists = db.query(Resume.resume_id).filter(Resume.jd_id == jd_id).first()
+    if resume_exists:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete JD with associated resumes",
+        )
+
+    file_path = jd.file_saved_location
+
+    db.delete(jd)
+    db.commit()
+
+    file_deleted = False
+    if file_path:
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                file_deleted = True
+        except Exception as exc:
+            logger.warning(
+                "JD deleted in DB but failed to delete file '%s' for jd_id=%s: %s",
+                file_path,
+                jd_id,
+                exc,
+            )
+
+    return JobDeleteResponse(
+        jd_id=jd_id,
+        file_deleted=file_deleted,
+        message="Job description deleted successfully",
+    )
+
+
+def get_dashboard_summary(db: Session) -> dict:
+    """Return realtime dashboard summary metrics from DB."""
+
+    jds_count = (
+        db.query(func.count(JobDescription.jd_id))
+        .filter(JobDescription.is_active.is_(True))
+        .scalar()
+        or 0
+    )
+
+    processed_resumes_count = (
+        db.query(func.count(Resume.resume_id))
+        .filter(Resume.status == "processed")
+        .scalar()
+        or 0
+    )
+
+    pending_resumes_count = (
+        db.query(func.count(Resume.resume_id))
+        .filter(Resume.status == "new")
+        .scalar()
+        or 0
+    )
+
+    unprocessed_resumes_count = (
+        db.query(func.count(Resume.resume_id))
+        .filter(Resume.status != "processed")
+        .scalar()
+        or 0
+    )
+
+    recent_events: list[tuple[datetime, dict]] = []
+
+    latest_jds = (
+        db.query(JobDescription)
+        .filter(JobDescription.is_active.is_(True))
+        .order_by(JobDescription.created_at.desc())
+        .limit(5)
+        .all()
+    )
+    for jd in latest_jds:
+        if jd.created_at:
+            recent_events.append(
+                (
+                    jd.created_at,
+                    {
+                        "activity_type": "jd_uploaded",
+                        "message": f"JD uploaded: {jd.file_name}",
+                        "timestamp": jd.created_at.isoformat(),
+                    },
+                )
+            )
+
+    latest_resumes = (
+        db.query(Resume)
+        .order_by(Resume.created_at.desc())
+        .limit(5)
+        .all()
+    )
+    for resume in latest_resumes:
+        if resume.created_at:
+            recent_events.append(
+                (
+                    resume.created_at,
+                    {
+                        "activity_type": "resume_uploaded",
+                        "message": f"Resume uploaded: {resume.file_name} (JD {resume.jd_id})",
+                        "timestamp": resume.created_at.isoformat(),
+                    },
+                )
+            )
+
+    latest_analyses = (
+        db.query(ResumeAnalysis)
+        .order_by(ResumeAnalysis.processed_at.desc())
+        .limit(5)
+        .all()
+    )
+    for analysis in latest_analyses:
+        if analysis.processed_at:
+            recent_events.append(
+                (
+                    analysis.processed_at,
+                    {
+                        "activity_type": "resume_processed",
+                        "message": f"Resume analyzed: {analysis.resume_id} (JD {analysis.jd_id})",
+                        "timestamp": analysis.processed_at.isoformat(),
+                    },
+                )
+            )
+
+    recent_events.sort(key=lambda item: item[0], reverse=True)
+    recent_activity = [event for _, event in recent_events[:10]]
+
+    return {
+        "jds_count": int(jds_count),
+        "unprocessed_resumes_count": int(unprocessed_resumes_count),
+        "processed_resumes_count": int(processed_resumes_count),
+        "pending_resumes_count": int(pending_resumes_count),
+        "recent_activity": recent_activity,
+    }

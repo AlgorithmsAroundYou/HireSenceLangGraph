@@ -5,7 +5,14 @@ import logging
 
 from app.services.resume_processing_service import run_once
 from app.core.config import settings
-from app.api import auth_routes, chat_routes, jd_routes, resume_routes, feedback_routes
+from app.api import (
+    auth_routes,
+    chat_routes,
+    jd_routes,
+    resume_routes,
+    feedback_routes,
+    profile_routes,
+)
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -19,9 +26,9 @@ app = FastAPI(title="HireSence AI Agent")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
-    allow_methods=["*"],  # or ["POST", "OPTIONS"]
+    allow_methods=["*"],  # or ["GET", "POST", "OPTIONS"]
     allow_headers=["*"],  # or ["Content-Type", "Authorization"]
 )
 
@@ -64,6 +71,7 @@ app.include_router(chat_routes.router, prefix="/api")
 app.include_router(jd_routes.router, prefix="/api")
 app.include_router(resume_routes.router, prefix="/api")
 app.include_router(feedback_routes.router, prefix="/api")
+app.include_router(profile_routes.router, prefix="/api")
 
 
 @app.get("/health")

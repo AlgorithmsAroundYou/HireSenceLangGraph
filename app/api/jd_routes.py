@@ -16,11 +16,17 @@ from app.models.api import (
     JobUploadResponse,
     JobDetailsResponse,
     JobAnalyzeResponse,
+    JobDeleteResponse,
+    JDListResponse,
+    DashboardSummaryResponse,
 )
 from app.services.jd_service import (
     create_job_description,
     get_job_description_details as get_jd_details_svc,
     analyze_job_description,
+    list_job_descriptions as list_jds_svc,
+    delete_job_description as delete_jd_svc,
+    get_dashboard_summary as get_dashboard_summary_svc,
 )
 from app.services.auth_service import get_db, get_current_user
 from app.services.file_service import save_upload_file
@@ -194,6 +200,22 @@ async def analyze_job_description_endpoint(
     )
 
 
+@router.get("/jd/list", response_model=JDListResponse)
+async def list_job_descriptions(
+    db=Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Return list of uploaded Job Descriptions.
+    Currently returns dummy data.
+    """
+
+    logger.info("JD list requested by user='%s'", user.user_name)
+
+    rows = list_jds_svc(db)
+    return {"jds": rows}
+
+
 @router.get("/jd/{jd_id}", response_model=JobDetailsResponse)
 async def get_job_description_details(
     jd_id: int, db=Depends(get_db), user: User = Depends(get_current_user)
@@ -206,6 +228,16 @@ async def get_job_description_details(
         )
 
     return jd_details
+
+
+@router.delete("/jd/{jd_id}", response_model=JobDeleteResponse)
+async def delete_job_description(
+    jd_id: int,
+    db=Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    logger.info("JD delete requested by user='%s' jd_id=%s", user.user_name, jd_id)
+    return delete_jd_svc(db, jd_id)
 
 
 @router.get("/jd/{jd_id}/download")
@@ -234,3 +266,14 @@ async def download_job_description(
         filename=jd.file_name or "job_description",
         media_type="application/octet-stream",
     )
+
+
+@router.get("/dashboard/summary", response_model=DashboardSummaryResponse)
+async def get_dashboard_summary(
+    db=Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Returns realtime dashboard summary metrics."""
+
+    logger.info("Dashboard summary requested by user='%s'", user.user_name)
+    return get_dashboard_summary_svc(db)
